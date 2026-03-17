@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-03-17
+
+### Added
+- `arch-review adr generate` — generates MADR-formatted ADRs from review findings
+- `ADRGenerator` engine with LiteLLM multi-provider support
+- `ADRWriter` — outputs numbered `.md` files following MADR format
+- `--preview` flag for terminal preview without writing files
+- `--from-review` flag to generate ADRs from a previous JSON review output
+- `--start-number` flag for sequencing into existing ADR directories
+- 16 new tests covering ADR models, generator, and writer (31 total)
+
 ## [0.1.0] — 2025-01-01
 
 ### Added
