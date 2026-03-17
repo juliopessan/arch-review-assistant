@@ -2,7 +2,7 @@
 
 > AI-powered architecture reviews that think like a principal engineer.
 
-[![CI](https://github.com/your-org/arch-review-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/arch-review-assistant/actions)
+[![CI](https://github.com/juliopessan/arch-review-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/juliopessan/arch-review-assistant/actions)
 [![PyPI](https://img.shields.io/pypi/v/arch-review)](https://pypi.org/project/arch-review)
 [![Python](https://img.shields.io/pypi/pyversions/arch-review)](https://pypi.org/project/arch-review)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -166,7 +166,7 @@ for finding in result.findings:
 ## Development
 
 ```bash
-git clone https://github.com/your-org/arch-review-assistant
+git clone https://github.com/juliopessan/arch-review-assistant
 cd arch-review-assistant
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

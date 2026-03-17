@@ -27,7 +27,7 @@ These are used in the docs and as test fixtures.
 ## Development setup
 
 ```bash
-git clone https://github.com/your-org/arch-review-assistant
+git clone https://github.com/juliopessan/arch-review-assistant
 cd arch-review-assistant
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

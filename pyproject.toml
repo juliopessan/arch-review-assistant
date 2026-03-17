@@ -43,10 +43,10 @@ dev = [
 arch-review = "arch_review.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/your-org/arch-review-assistant"
+Homepage = "https://github.com/juliopessan/arch-review-assistant"
 Documentation = "https://arch-review-assistant.readthedocs.io"
-Repository = "https://github.com/your-org/arch-review-assistant"
-Issues = "https://github.com/your-org/arch-review-assistant/issues"
+Repository = "https://github.com/juliopessan/arch-review-assistant"
+Issues = "https://github.com/juliopessan/arch-review-assistant/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
