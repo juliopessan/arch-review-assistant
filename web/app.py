@@ -267,15 +267,27 @@ with tab_review:
         if uploaded:
             with st.spinner(f"Extracting from `{uploaded.name}`..."):
                 try:
-                    text = extract_from_bytes(uploaded.read(), uploaded.name)
-                    st.session_state["arch_prefill"] = text
-                    st.success(f"✅ {len(text):,} chars extracted")
-                    with st.expander("Preview"):
-                        st.code(text[:600] + ("…" if len(text) > 600 else ""), language="text")
-                    if st.button("↑ Use as input", use_container_width=True, type="secondary"):
-                        st.rerun()
+                    raw_text = extract_from_bytes(uploaded.read(), uploaded.name)
                 except Exception as exc:
                     st.error(f"⚠️ {exc}")
+                    raw_text = None
+
+            if raw_text:
+                # Pass through LLM to structure the raw OCR output into clean Markdown
+                with st.spinner("Structuring extracted content..."):
+                    structured = _structure_ocr(raw_text, selected_model)
+
+                st.session_state["arch_prefill"] = structured
+                st.success(f"✅ Extracted and structured from `{uploaded.name}`")
+
+                with st.expander("📄 Structured Preview", expanded=True):
+                    st.markdown(structured)
+
+                with st.expander("🔍 Raw OCR text"):
+                    st.code(raw_text, language="text")
+
+                if st.button("↑ Use as input", use_container_width=True, type="primary"):
+                    st.rerun()
 
         st.divider()
         c1, c2 = st.columns(2)
@@ -654,6 +666,55 @@ with tab_memory:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _structure_ocr(raw_text: str, model: str) -> str:
+    """
+    Pass raw OCR text through LLM to produce clean, structured Markdown.
+    Falls back to cleaned raw text if LLM call fails or no API key is set.
+    """
+    import litellm
+
+    prompt = f"""You received raw text extracted via OCR from an architecture diagram or document.
+The text may contain garbled characters, broken words, and missing structure.
+
+Your task: reconstruct it into clean, structured Markdown that accurately describes the software architecture.
+
+Rules:
+- Identify components, services, databases, and flows from the text
+- Use ## headings for sections (Components, Flow, Infrastructure, Integrations)
+- Use bullet points for components with brief descriptions
+- Preserve technical names exactly as they appear (e.g. "Microsoft Entra ID", "Copilot Studio", "Azure Service Bus")
+- If a flow or connection is implied, describe it under a ## Flow section
+- Remove OCR noise (random letters, garbled fragments) but keep all meaningful technical terms
+- Write in English
+- Output ONLY the Markdown, no preamble
+
+RAW OCR TEXT:
+---
+{raw_text}
+---"""
+
+    try:
+        response = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a technical writer who reconstructs architecture descriptions from OCR output. Output only clean Markdown."},
+                {"role": "user",   "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=2048,
+        )
+        result = response.choices[0].message.content or ""
+        # Strip any accidental markdown fences
+        result = result.strip()
+        if result.startswith("```"):
+            result = "\n".join(l for l in result.splitlines() if not l.startswith("```")).strip()
+        return result if result else raw_text
+    except Exception:
+        # No API key set or call failed — return cleaned raw text
+        return raw_text
+
+
 def _build_md(r: ReviewResult) -> str:
     s = r.summary
     lines = ["# Architecture Review Report",f"\n> Model: `{r.model_used}`\n",
