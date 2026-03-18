@@ -217,11 +217,124 @@ EXAMPLE = """# E-commerce Order Processing System
 - No staging environment"""
 
 
-def _structure_ocr(raw_text: str, model: str) -> str:
-    """Pass raw OCR text through LLM to produce clean structured Markdown.
-    Falls back to raw text if no API key or LLM call fails."""
-    import litellm
+# ── Loading messages (funny, warm, rapport-building) ──────────────────────────
+import random
 
+LOADING_REVIEW = [
+    "☕ Grabbing a coffee and reading your architecture...",
+    "🔍 Our AI architect put on reading glasses...",
+    "🤓 Pretending to be a senior engineer for a moment...",
+    "🏗️ Blueprints loading... please don't panic...",
+    "🧠 Brain cells activating. All 175 billion of them.",
+    "📐 Drawing invisible diagrams in the air...",
+    "🎯 Scanning for footguns... found some. Working on it.",
+    "⚙️ Turning the gears of architectural wisdom...",
+    "🔎 Peering into your architecture like a hawk with bifocals...",
+    "💡 The AI is having thoughts. Architectural thoughts.",
+]
+
+LOADING_SQUAD = [
+    "🚀 Launching 4 agents into the void... they'll be fine.",
+    "🤖 Agents are arguing about your architecture. That's a good sign.",
+    "🏃 Security agent just found something. The others are jealous.",
+    "☕ Agents are caffeinated and ready. Please stand by.",
+    "🎪 The multi-agent circus has begun. No animals were harmed.",
+    "⚡ 4 AI brains reviewing simultaneously. Your EC2 is nervous.",
+    "🕵️ Security agent put on a trench coat. Getting serious.",
+    "🎸 Cost agent is playing the budget blues. It's a sad song.",
+    "🧩 Agents assembling findings like a puzzle. A scary puzzle.",
+    "🔬 Observability agent asking: 'but how would you even debug this?'",
+]
+
+LOADING_SYNTH = [
+    "🧠 Synthesizer consolidating... like merging 4 PRs at once.",
+    "🎯 Finding the patterns that the pattern-finder missed...",
+    "📊 Calculating the blast radius of your technical debt...",
+    "🔗 Connecting dots you didn't know existed...",
+    "🏆 Ranking your findings by 'oh no' severity...",
+    "✨ Making sense of 4 agents' simultaneous opinions...",
+    "🎭 The Synthesizer is having its protagonist moment...",
+]
+
+LOADING_ADR = [
+    "📄 Turning your chaos into documented decisions...",
+    "✍️ Writing the ADRs your future self will thank us for...",
+    "📝 Architecting the architecture of your architecture docs...",
+    "🗂️ Converting findings into things your team can actually act on...",
+    "📋 Making undocumented decisions feel embarrassed...",
+]
+
+LOADING_OCR = [
+    "👁️ Teaching the AI to read your diagram's handwriting...",
+    "🔍 Decoding what looks like a cat walked on your keyboard...",
+    "📸 Squinting at the pixels... harder... harder...",
+    "🧬 Reconstructing architecture from digital archaeology...",
+    "🔬 CSI: Architecture Division is on the case...",
+]
+
+LOADING_STRUCTURE = [
+    "🏗️ Turning raw OCR soup into structured architecture...",
+    "✨ Cleaning up the OCR mess. You're welcome.",
+    "🎨 Making your diagram description presentable...",
+    "📐 Applying structure to structured chaos...",
+    "🧹 Sweeping up the OCR debris into neat Markdown...",
+]
+
+def rand_msg(pool: list[str]) -> str:
+    return random.choice(pool)
+
+
+# ── Pure helper functions (defined before UI so they're always available) ─────
+
+def _build_md(r: "ReviewResult") -> str:
+    s = r.summary
+    lines = ["# Architecture Review Report", f"\n> Model: `{r.model_used}`\n",
+        "## Summary\n", "| Severity | Count |", "|----------|-------|",
+        f"| 🔴 Critical | {s.critical_count} |", f"| 🟠 High | {s.high_count} |",
+        f"| 🟡 Medium | {s.medium_count} |", f"| 🔵 Low | {s.low_count} |",
+        f"| ⚪ Info | {s.info_count} |", f"| **Total** | **{s.total_findings}** |",
+        f"\n## Overall Assessment\n\n{s.overall_assessment}"]
+    if r.senior_architect_questions:
+        lines += ["\n## Opening Questions\n"] + [f"- {q}" for q in r.senior_architect_questions]
+    lines.append("\n## Findings\n")
+    for f in r.findings:
+        cat = f.category.value.upper().replace("_", " ")
+        lines += [f"\n### {f.severity.value.upper()} — {f.title}",
+                  f"\n**Category:** {cat}\n\n{f.description}\n"]
+        if f.affected_components:
+            lines.append(f"**Affected:** {', '.join(f.affected_components)}\n")
+        lines.append(f"**Recommendation:** {f.recommendation}\n")
+        if f.questions_to_ask:
+            lines += ["**Questions:**"] + [f"- {q}" for q in f.questions_to_ask]
+    if r.recommended_adrs:
+        lines += ["\n## Recommended ADRs\n"] + [f"{i}. {a}" for i, a in enumerate(r.recommended_adrs, 1)]
+    return "\n".join(lines)
+
+
+def _build_zip(ar: "ADRGenerationResult") -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for adr in ar.adrs:
+            num = str(adr.number).zfill(4)
+            slug = re.sub(r"[\s_]+", "-", re.sub(r"[^\w\s-]", "", adr.title.lower())).strip("-")[:60]
+            d = "\n".join(f"* {x}" for x in adr.decision_drivers) or "* _(not specified)_"
+            p = "\n".join(f"* {x}" for x in adr.consequences_positive) or "* _(none)_"
+            n = "\n".join(f"* {x}" for x in adr.consequences_negative) or "* _(none)_"
+            body = "\n".join([
+                f"# {num}. {adr.title}\n", f"Date: {adr.date}\n",
+                f"## Status\n\n{adr.status.value.capitalize()}\n",
+                f"## Context\n\n{adr.context}\n", f"## Decision Drivers\n\n{d}\n",
+                f"## Decision\n\n{adr.decision}\n",
+                f"## Positive Consequences\n\n{p}\n", f"## Negative Consequences\n\n{n}\n",
+            ] + (["## Links\n"] + [f"* {lk}" for lk in adr.links] if adr.links else []))
+            zf.writestr(f"{num}-{slug}.md", body)
+    buf.seek(0)
+    return buf.read()
+
+
+def _structure_ocr(raw_text: str, model: str) -> str:
+    """Pass raw OCR text through LLM → clean structured Markdown."""
+    import litellm
     prompt = f"""You received raw text extracted via OCR from an architecture diagram or document.
 The text may contain garbled characters, broken words, and missing structure.
 
@@ -239,7 +352,6 @@ RAW OCR TEXT:
 ---
 {raw_text}
 ---"""
-
     try:
         response = litellm.completion(
             model=model,
@@ -307,7 +419,7 @@ with tab_review:
         uploaded = st.file_uploader("Upload", type=get_supported_formats(), label_visibility="collapsed")
 
         if uploaded:
-            with st.spinner(f"Extracting from `{uploaded.name}`..."):
+            with st.spinner(rand_msg(LOADING_OCR)):
                 try:
                     raw_text = extract_from_bytes(uploaded.read(), uploaded.name)
                 except Exception as exc:
@@ -316,7 +428,7 @@ with tab_review:
 
             if raw_text:
                 # Pass through LLM to structure the raw OCR output into clean Markdown
-                with st.spinner("Structuring extracted content..."):
+                with st.spinner(rand_msg(LOADING_STRUCTURE)):
                     structured = _structure_ocr(raw_text, selected_model)
 
                 st.session_state["arch_prefill"] = structured
@@ -357,7 +469,7 @@ with tab_review:
     if run_single and arch_text.strip():
         arch_inp = ArchitectureInput(description=arch_text, context=context or None,
                                       focus_areas=[FindingCategory(f) for f in focus_areas])
-        with st.spinner(f"Reviewing with `{selected_model}`..."):
+        with st.spinner(rand_msg(LOADING_REVIEW)):
             try:
                 r = ReviewEngine(model=selected_model).review(arch_inp)
                 st.session_state["review_result"] = r
@@ -365,7 +477,7 @@ with tab_review:
             except Exception as exc:
                 st.error(f"❌ {exc}"); st.stop()
         if gen_adrs:
-            with st.spinner("Generating ADRs..."):
+            with st.spinner(rand_msg(LOADING_ADR)):
                 try: st.session_state["adr_result"] = ADRGenerator(model=selected_model).from_review(r)
                 except Exception as exc: st.warning(f"ADR generation: {exc}")
         st.success("✅ Done — open the **Findings** tab."); st.rerun()
@@ -490,7 +602,7 @@ with tab_squad:
 
         t = threading.Thread(target=_run, args=(q,), daemon=True)
         t.start()
-        with st.spinner("Squad running — agents working in parallel (~30–60s)..."):
+        with st.spinner(rand_msg(LOADING_SQUAD)):
             while True:
                 try: ev = q.get(timeout=180)
                 except Empty: st.error("Squad timed out."); break
@@ -503,7 +615,7 @@ with tab_squad:
 
         st.session_state["squad_running"] = False
         if gen_adrs and "review_result" in st.session_state:
-            with st.spinner("Generating ADRs..."):
+            with st.spinner(rand_msg(LOADING_ADR)):
                 try: st.session_state["adr_result"] = ADRGenerator(model=selected_model).from_review(st.session_state["review_result"])
                 except Exception: pass
         st.rerun()
@@ -588,7 +700,7 @@ with tab_adrs:
         c1,c2 = st.columns([1,3])
         with c1:
             if st.button("⚡ Generate ADRs", type="primary", use_container_width=True):
-                with st.spinner("Generating..."):
+                with st.spinner(rand_msg(LOADING_ADR)):
                     try:
                         st.session_state["adr_result"] = ADRGenerator(model=selected_model).from_review(st.session_state["review_result"])
                         st.rerun()
@@ -705,46 +817,3 @@ with tab_memory:
         else:
             st.session_state["_reset_ok"] = True
             st.warning("Click again to confirm — cannot be undone.")
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _build_md(r: ReviewResult) -> str:
-    s = r.summary
-    lines = ["# Architecture Review Report",f"\n> Model: `{r.model_used}`\n",
-        "## Summary\n","| Severity | Count |","|----------|-------|",
-        f"| 🔴 Critical | {s.critical_count} |",f"| 🟠 High | {s.high_count} |",
-        f"| 🟡 Medium | {s.medium_count} |",f"| 🔵 Low | {s.low_count} |",
-        f"| ⚪ Info | {s.info_count} |",f"| **Total** | **{s.total_findings}** |",
-        f"\n## Overall Assessment\n\n{s.overall_assessment}"]
-    if r.senior_architect_questions:
-        lines += ["\n## Opening Questions\n"]+[f"- {q}" for q in r.senior_architect_questions]
-    lines.append("\n## Findings\n")
-    for f in r.findings:
-        cat = f.category.value.upper().replace("_"," ")
-        lines += [f"\n### {SEV_LABEL[f.severity]} — {f.title}",
-            f"\n**Category:** {cat}\n\n{f.description}\n"]
-        if f.affected_components: lines.append(f"**Affected:** {', '.join(f.affected_components)}\n")
-        lines.append(f"**Recommendation:** {f.recommendation}\n")
-        if f.questions_to_ask: lines += ["**Questions:**"]+[f"- {q}" for q in f.questions_to_ask]
-    if r.recommended_adrs:
-        lines += ["\n## Recommended ADRs\n"]+[f"{i}. {a}" for i,a in enumerate(r.recommended_adrs,1)]
-    return "\n".join(lines)
-
-def _build_zip(ar: ADRGenerationResult) -> bytes:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf,"w",zipfile.ZIP_DEFLATED) as zf:
-        for adr in ar.adrs:
-            num = str(adr.number).zfill(4)
-            slug = re.sub(r"[\s_]+","-",re.sub(r"[^\w\s-]","",adr.title.lower())).strip("-")[:60]
-            d = "\n".join(f"* {x}" for x in adr.decision_drivers) or "* _(not specified)_"
-            p = "\n".join(f"* {x}" for x in adr.consequences_positive) or "* _(none)_"
-            n = "\n".join(f"* {x}" for x in adr.consequences_negative) or "* _(none)_"
-            body = "\n".join([f"# {num}. {adr.title}\n",f"Date: {adr.date}\n",
-                f"## Status\n\n{adr.status.value.capitalize()}\n",
-                f"## Context\n\n{adr.context}\n",f"## Decision Drivers\n\n{d}\n",
-                f"## Decision\n\n{adr.decision}\n",
-                f"## Positive Consequences\n\n{p}\n",f"## Negative Consequences\n\n{n}\n",
-            ]+(["## Links\n"]+[f"* {lk}" for lk in adr.links] if adr.links else []))
-            zf.writestr(f"{num}-{slug}.md", body)
-    buf.seek(0); return buf.read()
