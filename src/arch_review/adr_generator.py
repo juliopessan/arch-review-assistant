@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -11,6 +10,7 @@ import litellm
 from arch_review.models import Finding, ReviewResult
 from arch_review.models_adr import ADR, ADRGenerationResult, ADROption, ADRStatus
 from arch_review.prompts.adr import ADR_SYSTEM_PROMPT, build_adr_prompt
+from arch_review.utils.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -105,20 +105,16 @@ class ADRGenerator:
 
     def _parse_adrs(self, content: str) -> list[ADR]:
         """Parse LLM response into ADR objects."""
-        content = content.strip()
-        if content.startswith("```"):
-            content = "\n".join(
-                line for line in content.split("\n")
-                if not line.startswith("```")
-            )
-
         try:
-            raw_list: list[dict[str, Any]] = json.loads(content)
-        except json.JSONDecodeError as exc:
-            logger.error("Failed to parse ADR response as JSON: %s", exc)
-            raise ValueError(
-                f"Model returned invalid JSON for ADR generation. Error: {exc}"
-            ) from exc
+            parsed = parse_llm_json(content, context="ADRGenerator")
+        except ValueError as exc:
+            logger.error("Failed to parse ADR response: %s", exc)
+            raise
+
+        raw_list: list[dict[str, Any]] = (
+            parsed if isinstance(parsed, list)
+            else parsed.get("adrs", parsed.get("findings", [parsed]))
+        )
 
         adrs = []
         for i, raw in enumerate(raw_list, start=1):

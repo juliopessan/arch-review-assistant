@@ -32,6 +32,7 @@ from arch_review.squad.prompts import (
     build_security_prompt,
     build_synthesizer_prompt,
 )
+from arch_review.utils.json_parser import parse_llm_json, sanitize_architecture_input
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,8 @@ class ReviewSquad:
         return asyncio.run(self._review_async(arch_input))
 
     async def _review_async(self, arch_input: ArchitectureInput) -> ReviewResult:
-        architecture = arch_input.description
+        # Sanitize input — removes Mermaid comments, smart quotes, control chars
+        architecture = sanitize_architecture_input(arch_input.description)
         context = arch_input.context or ""
         squad_patterns = self.squad_memory.get_recurring_patterns()
 
@@ -223,17 +225,10 @@ class ReviewSquad:
         return result
 
     def _parse_json(self, content: str, agent_name: str) -> dict[str, Any]:
-        """Parse JSON, stripping markdown fences if present."""
-        content = content.strip()
-        if content.startswith("```"):
-            content = "\n".join(
-                line for line in content.split("\n")
-                if not line.startswith("```")
-            )
+        """Parse JSON using robust multi-strategy parser."""
         try:
-            return json.loads(content)
-        except json.JSONDecodeError as exc:
-            logger.error("Agent %s returned invalid JSON: %s", agent_name, exc)
+            return parse_llm_json(content, context=agent_name)
+        except ValueError:
             return {"findings": [], "agent_insight": "", "lesson_for_memory": ""}
 
     def _build_findings(self, raw_findings: list[dict[str, Any]]) -> list[Finding]:

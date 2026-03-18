@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -17,6 +16,7 @@ from arch_review.models import (
     Severity,
 )
 from arch_review.prompts import SYSTEM_PROMPT, build_review_prompt
+from arch_review.utils.json_parser import parse_llm_json, sanitize_architecture_input
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,11 @@ class ReviewEngine:
     def review(self, arch_input: ArchitectureInput) -> ReviewResult:
         """Run a full architecture review and return structured results."""
 
+        # Sanitize input to prevent JSON serialization issues with special chars
+        clean_description = sanitize_architecture_input(arch_input.description)
+
         prompt = build_review_prompt(
-            architecture=arch_input.description,
+            architecture=clean_description,
             context=arch_input.context,
             focus_areas=[f.value for f in arch_input.focus_areas],
         )
@@ -97,24 +100,8 @@ class ReviewEngine:
         )
 
     def _parse_response(self, content: str) -> dict[str, Any]:
-        """Parse JSON from LLM response, handling common formatting issues."""
-        # Strip markdown fences if model misbehaves
-        content = content.strip()
-        if content.startswith("```"):
-            lines = content.split("\n")
-            content = "\n".join(
-                line for line in lines
-                if not line.startswith("```")
-            )
-
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as exc:
-            logger.error("Failed to parse LLM response as JSON: %s", exc)
-            logger.debug("Raw response: %s", content)
-            raise ValueError(
-                f"Model returned invalid JSON. Try a more capable model. Error: {exc}"
-            ) from exc
+        """Parse JSON from LLM response using robust multi-strategy parser."""
+        return parse_llm_json(content, context="ReviewEngine")
 
     def _build_findings(self, raw_findings: list[dict[str, Any]]) -> list[Finding]:
         """Convert raw dicts to typed Finding objects."""

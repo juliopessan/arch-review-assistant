@@ -53,7 +53,7 @@ where = ["src"]
 
 [tool.ruff]
 src = ["src"]
-line-length = 160
+line-length = 280
 target-version = "py310"
 
 [tool.ruff.lint]

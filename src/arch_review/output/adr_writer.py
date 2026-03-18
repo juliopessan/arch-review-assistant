@@ -81,12 +81,7 @@ def _write_adr(adr: ADR, output_dir: Path) -> Path:
     drivers_md = "\n".join(f"* {d}" for d in adr.decision_drivers) if adr.decision_drivers else "* _(not specified)_"
 
     # Options list (summary)
-    if adr.considered_options:
-        options_list = "\n".join(
-            f"* [{o.title}](#{_slugify(o.title)})" for o in adr.considered_options
-        )
-    else:
-        options_list = "* _(no alternatives documented)_"
+    options_list = "\n".join(f"* [{o.title}](#{_slugify(o.title)})" for o in adr.considered_options) if adr.considered_options else "* _(no alternatives documented)_"
 
     # First option is the chosen one by convention
     chosen_title = adr.considered_options[0].title if adr.considered_options else "See decision below"
