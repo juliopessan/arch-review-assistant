@@ -180,6 +180,18 @@ After every squad review:
 
 Lessons inject into every new review — the agents get smarter over time.
 
+**Evolution levels per agent:**
+
+| Level | Lessons | What it means |
+|---|---|---|
+| 🌱 Fresh | 0 | Default prompts, no personalization |
+| 🟢 Growing | 1–2 | Starting to recognize your patterns |
+| 🔵 Experienced | 3–7 | Calibrated to your stack and failure modes |
+| 🟣 Expert | 8+ | Deeply personalized — misses very little |
+
+The **Evolution Dashboard** in the Memory tab tracks this in real time:
+total reviews, lessons learned per agent, cross-patterns discovered, and findings caught across sessions.
+
 ### ADR Generation
 Findings are converted into Architecture Decision Records following the [MADR](https://adr.github.io/madr/) format:
 

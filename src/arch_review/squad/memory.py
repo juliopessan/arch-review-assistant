@@ -57,6 +57,22 @@ class AgentMemory:
             return content.split("---", 1)[1].strip()
         return ""
 
+    def get_stats(self) -> dict:
+        """Return stats about this agent's memory evolution."""
+        import re
+        if not self.agent_file.exists():
+            return {"lessons": 0, "patterns": 0, "size_bytes": 0, "last_updated": None}
+        content = self.read()
+        lessons  = len(re.findall(r"^## Lesson \[", content, re.MULTILINE))
+        patterns = len(re.findall(r"^## Pattern \[", content, re.MULTILINE))
+        dates    = re.findall(r"## Lesson \[(\d{4}-\d{2}-\d{2})\]", content)
+        return {
+            "lessons":      lessons,
+            "patterns":     patterns,
+            "size_bytes":   self.agent_file.stat().st_size,
+            "last_updated": max(dates) if dates else None,
+        }
+
     def _ensure_initialized(self) -> None:
         """Create the AGENT.md file with default content if it doesn't exist."""
         if self.agent_file.exists():
@@ -126,10 +142,29 @@ class SquadMemory:
         """Return the patterns section for prompt injection."""
         content = self.read()
         if "## Cross-Agent Pattern" in content:
-            # Extract just the patterns section
             idx = content.find("## Cross-Agent Pattern")
             return content[idx:].strip()
         return ""
+
+    def get_stats(self) -> dict:
+        """Return squad-level evolution stats."""
+        import re
+        if not self.squad_file.exists():
+            return {"reviews": 0, "cross_patterns": 0, "size_bytes": 0}
+        content = self.squad_file.read_text(encoding="utf-8")
+        reviews       = len(re.findall(r"^## Review \[", content, re.MULTILINE))
+        cross_patterns = len(re.findall(r"^## Cross-Agent Pattern \[", content, re.MULTILINE))
+        # Extract findings totals from review history
+        totals  = [int(m) for m in re.findall(r"\*\*Findings:\*\* (\d+) total", content)]
+        criticals = [int(m) for m in re.findall(r"(\d+) critical", content)]
+        return {
+            "reviews":          reviews,
+            "cross_patterns":   cross_patterns,
+            "size_bytes":       self.squad_file.stat().st_size,
+            "total_findings":   sum(totals),
+            "total_criticals":  sum(criticals),
+            "avg_findings":     round(sum(totals) / reviews, 1) if reviews else 0,
+        }
 
     def _ensure_initialized(self) -> None:
         if self.squad_file.exists():

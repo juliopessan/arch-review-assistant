@@ -636,11 +636,11 @@ with tab_export:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║  TAB: MEMORY                                                                ║
+# ║  TAB: MEMORY + EVOLUTION DASHBOARD                                         ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_memory:
     from arch_review.squad.memory import DEFAULT_MEMORY_DIR, AgentMemory, SquadMemory
-    mem = DEFAULT_MEMORY_DIR
+    mem   = DEFAULT_MEMORY_DIR
     alist = ["security_agent","reliability_agent","cost_agent","observability_agent","synthesizer_agent"]
     AGENT_META_MEM = {
         "security_agent":      {"ic":"🔐","nm":t("agent.security.nm")},
@@ -653,42 +653,120 @@ with tab_memory:
     st.markdown(t("memory.title"))
     st.caption(t("memory.caption"))
 
+    # ── Agent status cards ─────────────────────────────────────────────────────
     mcols = st.columns(5)
     for i, nm in enumerate(alist):
-        a = AGENT_META_MEM[nm]; f = mem/f"{nm}.md"
+        a = AGENT_META_MEM[nm]; f = mem / f"{nm}.md"
         exists = f.exists()
         sz = f"{f.stat().st_size:,}b" if exists else "—"
         ls = f.read_text().count("## Lesson") if exists else 0
         with mcols[i]:
-            st.markdown(f'<div class="memcard {"live" if exists else ""}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="sz">{sz}</div><div class="ls">{ls} {t("memory.lessons")}</div></div>', unsafe_allow_html=True)
+            css = "live" if exists else ""
+            st.markdown(f'<div class="memcard {css}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="sz">{sz}</div><div class="ls">{ls} {t("memory.lessons")}</div></div>', unsafe_allow_html=True)
 
-    sqf = mem/"SQUAD_MEMORY.md"
+    sqf = mem / "SQUAD_MEMORY.md"
     if sqf.exists():
         rv = sqf.read_text().count("## Review [")
         pt = sqf.read_text().count("## Cross-Agent Pattern")
         st.info(f"📊 **SQUAD_MEMORY.md** — {rv} {t('memory.reviews')} · {pt} {t('memory.patterns')}")
 
     st.divider()
+
+    # ── Evolution Dashboard ────────────────────────────────────────────────────
+    st.markdown(t("memory.evo.title"))
+    st.caption(t("memory.evo.caption"))
+
+    sq_mem   = SquadMemory(mem)
+    sq_stats = sq_mem.get_stats()
+
+    if sq_stats["reviews"] == 0:
+        st.markdown(f"""
+        <div style="background:#f5f3ff;border:1.5px dashed #c7d2fe;border-radius:14px;
+        padding:32px;text-align:center">
+          <div style="font-size:2.5rem;margin-bottom:12px">🌱</div>
+          <div style="font-weight:700;font-size:1rem;color:#4338ca;margin-bottom:6px">
+            {t("memory.evo.no_reviews")}
+          </div>
+          <div style="font-size:.83rem;color:#6b7280;margin-top:8px">
+            <code>arch-review squad review -i architecture.md</code>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Squad-level stat row
+        s1,s2,s3,s4,s5,s6 = st.columns(6)
+        def _sc(col, number, label, color="#4f46e5"):
+            col.markdown(f'<div class="stat"><div class="n" style="color:{color}">{number}</div><div class="l">{label}</div></div>', unsafe_allow_html=True)
+
+        total_lessons = sum(AgentMemory(n, mem).get_stats()["lessons"] for n in alist)
+        _sc(s1, sq_stats["reviews"],        t("memory.evo.reviews"),  "#4f46e5")
+        _sc(s2, total_lessons,              t("memory.evo.lessons"),  "#16a34a")
+        _sc(s3, sq_stats["cross_patterns"], t("memory.evo.patterns"), "#0891b2")
+        _sc(s4, sq_stats["total_findings"], t("memory.evo.findings"), "#ea580c")
+        _sc(s5, sq_stats["total_criticals"],t("memory.evo.criticals"),"#dc2626")
+        _sc(s6, sq_stats["avg_findings"],   t("memory.evo.avg"),      "#6b7280")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(t("memory.evo.agent_title"))
+        acols = st.columns(5)
+        for i, nm in enumerate(alist):
+            a     = AGENT_META_MEM[nm]
+            stats = AgentMemory(nm, mem).get_stats()
+            ls    = stats["lessons"]
+            pt    = stats["patterns"]
+            last  = stats["last_updated"] or t("memory.evo.never")
+            if ls == 0:   level, color = t("memory.evo.fresh"),       "#9ca3af"
+            elif ls < 3:  level, color = t("memory.evo.growing"),     "#16a34a"
+            elif ls < 8:  level, color = t("memory.evo.experienced"), "#0891b2"
+            else:         level, color = t("memory.evo.expert"),      "#7c3aed"
+            bar_w = min(int(ls / 10 * 100), 100)
+            with acols[i]:
+                st.markdown(f"""
+                <div style="background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;
+                padding:16px 12px;text-align:center">
+                  <div style="font-size:1.6rem;margin-bottom:6px">{a["ic"]}</div>
+                  <div style="font-weight:700;font-size:.82rem;color:#111">{a["nm"]}</div>
+                  <div style="font-size:.72rem;font-weight:700;color:{color};margin:6px 0 4px">{level}</div>
+                  <div style="background:#f3f4f6;border-radius:999px;height:5px;margin:6px 0">
+                    <div style="background:{color};height:5px;border-radius:999px;width:{bar_w}%"></div>
+                  </div>
+                  <div style="font-size:.68rem;color:#6b7280;margin-top:6px">
+                    {ls} {t("memory.evo.lessons_lbl")} · {pt} {t("memory.evo.patterns_lbl")}
+                  </div>
+                  <div style="font-size:.65rem;color:#9ca3af;margin-top:2px">
+                    {t("memory.evo.last")} {last}
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        st.divider()
+        st.markdown(t("memory.evo.how_title"))
+        st.markdown(f'<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:20px 24px;font-size:.87rem;color:#374151;line-height:1.7">{t("memory.evo.how_body")}</div>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── File viewer ────────────────────────────────────────────────────────────
     sel = st.selectbox(t("memory.view"), alist, format_func=lambda n: f"{AGENT_META_MEM[n]['ic']} {AGENT_META_MEM[n]['nm']}")
-    mf = mem/f"{sel}.md"
+    mf  = mem / f"{sel}.md"
     if mf.exists():
         t1, t2 = st.tabs([t("memory.full"), t("memory.lessons_only")])
         with t1: st.code(mf.read_text(), language="markdown")
         with t2:
-            txt = mf.read_text(); sec = txt.split("---",1)[1].strip() if "---" in txt else f"({t('memory.no_yet')})"
+            txt = mf.read_text()
+            sec = txt.split("---", 1)[1].strip() if "---" in txt else f"({t('memory.no_yet')})"
             st.code(sec, language="markdown")
     else:
         st.info(t("memory.no_yet"))
 
     st.markdown(t("memory.squad_mem"))
     if sqf.exists(): st.code(sqf.read_text(), language="markdown")
-    else: st.info(t("memory.no_squad"))
+    else:            st.info(t("memory.no_squad"))
 
     st.divider()
     if st.button(t("memory.reset_btn"), type="secondary"):
         if st.session_state.get("_reset_ok"):
             for nm in alist:
-                f = mem/f"{nm}.md"
+                f = mem / f"{nm}.md"
                 if f.exists(): f.unlink()
                 AgentMemory(nm, mem)
             if sqf.exists(): sqf.unlink()
