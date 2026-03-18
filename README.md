@@ -6,6 +6,7 @@
 [![PyPI](https://img.shields.io/pypi/v/arch-review)](https://pypi.org/project/arch-review)
 [![Python](https://img.shields.io/pypi/pyversions/arch-review)](https://pypi.org/project/arch-review)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Downloads](https://img.shields.io/pypi/dm/arch-review)](https://pypi.org/project/arch-review)
 
 ---
 
@@ -40,6 +41,12 @@ arch-review review -i arch.md --model gpt-4o
 
 # Export as Markdown report
 arch-review review -i arch.md -o markdown --output-file review.md
+
+# Generate ADRs from findings in one shot
+arch-review adr generate -i arch.md
+
+# Preview ADRs without writing files
+arch-review adr generate -i arch.md --preview
 
 # See a sample architecture to try
 arch-review example
@@ -179,7 +186,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add prompts, output formats, o
 
 ## Roadmap
 
-- [ ] ADR generator from findings (`arch-review adr generate`)
+- [x] ADR generator from findings (`arch-review adr generate`)
+- [ ] Publish to PyPI — `pip install arch-review`
 - [ ] Mermaid diagram parser for more precise component-level findings
 - [ ] Compare two architecture versions (`arch-review diff`)
 - [ ] OWASP Top 10 specialized reviewer
