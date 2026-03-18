@@ -497,7 +497,7 @@ with tab_findings:
                     st.markdown(f"**{i}.** {q}")
 
         st.markdown("#### Findings")
-        sev_filter = st.multiselect("Filter", [sv.value for sv in Severity], default=[sv.value for sv in Severity], horizontal=True, label_visibility="collapsed")
+        sev_filter = st.multiselect("Filter by severity", [sv.value for sv in Severity], default=[sv.value for sv in Severity], label_visibility="collapsed")
         filtered = [f for f in r.findings if f.severity.value in sev_filter]
 
         for f in filtered:
