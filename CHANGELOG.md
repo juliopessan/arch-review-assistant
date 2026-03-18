@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] — 2026-03-17
+## [0.3.0] — 2026-03-17
+
+### Added
+- Streamlit Web UI (`web/app.py`) — full review + ADR + export in browser
+- Model selector, API key input, focus area filter in sidebar
+- Severity-coded findings with recommendations and architect questions
+- ADR viewer with expandable options, pros/cons, consequences
+- Export as JSON, Markdown report, or ADR zip
+- Dockerfile for containerized deploy
+- Procfile for Railway / Render one-click deploy
+- `.streamlit/config.toml` with brand theme
+- `requirements.txt` for PaaS platforms
 
 ### Added
 - `arch-review adr generate` — generates MADR-formatted ADRs from review findings

@@ -170,6 +170,44 @@ for finding in result.findings:
 
 ---
 
+## Web UI
+
+A Streamlit interface for teams that prefer not to use the CLI.
+
+### Run locally
+
+```bash
+pip install streamlit
+streamlit run web/app.py
+# Opens at http://localhost:8501
+```
+
+### Docker
+
+```bash
+docker build -t arch-review .
+docker run -p 8501:8501 \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  arch-review
+```
+
+### Deploy to Railway / Render (free tier)
+
+1. Fork this repo
+2. Connect to [Railway](https://railway.app) or [Render](https://render.com)
+3. Set environment variables (`ANTHROPIC_API_KEY`, etc.)
+4. Deploy — the `Procfile` handles the rest
+
+### Features
+
+- Paste architecture → instant review with severity-coded findings
+- Model selector (Claude, GPT-4o, Gemini, Mistral, Ollama)
+- Focus area filter (security, reliability, cost...)
+- ADR generator with expandable detail per decision
+- Export as JSON, Markdown, or ADR zip
+
+---
+
 ## Development
 
 ```bash
@@ -187,11 +225,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add prompts, output formats, o
 ## Roadmap
 
 - [x] ADR generator from findings (`arch-review adr generate`)
+- [x] Web UI — Streamlit interface with model selector + export
 - [ ] Publish to PyPI — `pip install arch-review`
 - [ ] Mermaid diagram parser for more precise component-level findings
 - [ ] Compare two architecture versions (`arch-review diff`)
 - [ ] OWASP Top 10 specialized reviewer
-- [ ] Web UI for team reviews
 - [ ] Slack / Teams bot integration
 
 ---
