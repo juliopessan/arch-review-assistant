@@ -216,6 +216,48 @@ EXAMPLE = """# E-commerce Order Processing System
 - RabbitMQ on same EC2 instance
 - No staging environment"""
 
+
+def _structure_ocr(raw_text: str, model: str) -> str:
+    """Pass raw OCR text through LLM to produce clean structured Markdown.
+    Falls back to raw text if no API key or LLM call fails."""
+    import litellm
+
+    prompt = f"""You received raw text extracted via OCR from an architecture diagram or document.
+The text may contain garbled characters, broken words, and missing structure.
+
+Reconstruct it into clean, structured Markdown describing the software architecture.
+
+Rules:
+- Use ## headings: Components, Flow, Infrastructure, Integrations
+- Use bullet points with component names and brief descriptions
+- Preserve technical names exactly (e.g. "Microsoft Entra ID", "Copilot Studio", "Azure Service Bus")
+- Describe implied flows/connections under ## Flow
+- Remove OCR noise (random letters, garbled fragments), keep all meaningful technical terms
+- Output ONLY the Markdown, no preamble or explanation
+
+RAW OCR TEXT:
+---
+{raw_text}
+---"""
+
+    try:
+        response = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a technical writer who reconstructs architecture descriptions from OCR output. Output only clean Markdown."},
+                {"role": "user",   "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=2048,
+        )
+        result = (response.choices[0].message.content or "").strip()
+        if result.startswith("```"):
+            result = "\n".join(l for l in result.splitlines() if not l.startswith("```")).strip()
+        return result if result else raw_text
+    except Exception:
+        return raw_text
+
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ Settings")
@@ -666,54 +708,6 @@ with tab_memory:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _structure_ocr(raw_text: str, model: str) -> str:
-    """
-    Pass raw OCR text through LLM to produce clean, structured Markdown.
-    Falls back to cleaned raw text if LLM call fails or no API key is set.
-    """
-    import litellm
-
-    prompt = f"""You received raw text extracted via OCR from an architecture diagram or document.
-The text may contain garbled characters, broken words, and missing structure.
-
-Your task: reconstruct it into clean, structured Markdown that accurately describes the software architecture.
-
-Rules:
-- Identify components, services, databases, and flows from the text
-- Use ## headings for sections (Components, Flow, Infrastructure, Integrations)
-- Use bullet points for components with brief descriptions
-- Preserve technical names exactly as they appear (e.g. "Microsoft Entra ID", "Copilot Studio", "Azure Service Bus")
-- If a flow or connection is implied, describe it under a ## Flow section
-- Remove OCR noise (random letters, garbled fragments) but keep all meaningful technical terms
-- Write in English
-- Output ONLY the Markdown, no preamble
-
-RAW OCR TEXT:
----
-{raw_text}
----"""
-
-    try:
-        response = litellm.completion(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a technical writer who reconstructs architecture descriptions from OCR output. Output only clean Markdown."},
-                {"role": "user",   "content": prompt},
-            ],
-            temperature=0.1,
-            max_tokens=2048,
-        )
-        result = response.choices[0].message.content or ""
-        # Strip any accidental markdown fences
-        result = result.strip()
-        if result.startswith("```"):
-            result = "\n".join(l for l in result.splitlines() if not l.startswith("```")).strip()
-        return result if result else raw_text
-    except Exception:
-        # No API key set or call failed — return cleaned raw text
-        return raw_text
-
 
 def _build_md(r: ReviewResult) -> str:
     s = r.summary
