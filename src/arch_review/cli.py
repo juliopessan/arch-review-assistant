@@ -342,3 +342,153 @@ def example() -> None:
 - No staging environment
 """.strip()
     console.print(example_arch)
+
+
+# ── Squad commands ─────────────────────────────────────────────────────────────
+
+@main.group()
+def squad() -> None:
+    """ReviewSquad — 4 specialized agents in parallel with memory evolution."""
+
+
+@squad.command("review")
+@click.option("--input", "-i", "input_source", type=click.Path(exists=True, path_type=Path),
+              default=None, help="Path to architecture file.")
+@click.option("--stdin", is_flag=True, default=False, help="Read from stdin.")
+@click.option("--context", "-c", default=None, help="Business context or constraints.")
+@click.option("--model", "-m", default=DEFAULT_MODEL, show_default=True, help="LLM model.")
+@click.option("--output", "-o", type=click.Choice(["terminal", "markdown", "json"]),
+              default="terminal", show_default=True)
+@click.option("--output-file", type=click.Path(path_type=Path), default=None)
+@click.option("--memory-dir", type=click.Path(path_type=Path), default=None,
+              help="Custom directory for agent memory files (default: ~/.arch-review/memory).")
+def squad_review(
+    input_source: Path | None,
+    stdin: bool,
+    context: str | None,
+    model: str,
+    output: str,
+    output_file: Path | None,
+    memory_dir: Path | None,
+) -> None:
+    """Run a multi-agent squad review with memory evolution.
+
+    \b
+    Launches 4 specialized agents in parallel:
+      - SecurityAgent      — auth, secrets, compliance, attack vectors
+      - ReliabilityAgent   — SPOFs, resilience, cascading failures
+      - CostAgent          — FinOps, right-sizing, data transfer
+      - ObservabilityAgent — logs, metrics, tracing, alerting
+
+    Followed by a SynthesizerAgent that consolidates findings.
+    Each agent learns from every review and improves over time.
+
+    \b
+    Examples:
+      arch-review squad review -i architecture.md
+      arch-review squad review -i arch.md --model gpt-4o -o markdown
+      arch-review squad review --stdin < arch.txt
+    """
+    from arch_review.squad import ReviewSquad
+
+    # Gather architecture input
+    architecture_text = ""
+    if stdin or (not input_source and not sys.stdin.isatty()):
+        architecture_text = click.get_text_stream("stdin").read().strip()
+    elif input_source:
+        architecture_text = input_source.read_text(encoding="utf-8").strip()
+    else:
+        architecture_text = click.edit(
+            "# Paste your architecture description here\n"
+        ) or ""
+        architecture_text = "\n".join(
+            line for line in architecture_text.splitlines()
+            if not line.startswith("#")
+        ).strip()
+
+    if not architecture_text:
+        err_console.print("[red]Error:[/red] No architecture description provided.")
+        raise click.Abort()
+
+    arch_input = ArchitectureInput(
+        description=architecture_text,
+        context=context,
+    )
+
+    console.print(f"\n[bold blue]ReviewSquad launching[/bold blue] with [cyan]{model}[/cyan]")
+    console.print("[dim]4 agents running in parallel: Security · Reliability · Cost · Observability[/dim]")
+    console.print("[dim]Followed by Synthesizer — this may take 30-60 seconds...[/dim]\n")
+
+    squad_engine = ReviewSquad(model=model, memory_dir=memory_dir)
+    try:
+        result = squad_engine.review(arch_input)
+    except Exception as exc:
+        err_console.print(f"[red]Squad review failed:[/red] {exc}")
+        raise SystemExit(1) from exc
+
+    if output_file:
+        if output == "json":
+            output_file.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+        else:
+            print_review(result, output_format=output)
+        console.print(f"\n[green]Report saved to:[/green] {output_file}")
+    else:
+        print_review(result, output_format=output)
+
+    if result.summary.critical_count > 0:
+        raise SystemExit(2)
+
+
+@squad.command("memory")
+@click.option("--memory-dir", type=click.Path(path_type=Path), default=None)
+@click.option("--agent", default=None, help="Show memory for a specific agent.")
+@click.option("--reset", is_flag=True, default=False, help="Reset all agent memories to defaults.")
+def squad_memory_cmd(memory_dir: Path | None, agent: str | None, reset: bool) -> None:
+    """View or manage agent memory files.
+
+    \b
+    Examples:
+      arch-review squad memory                      # show all memory paths
+      arch-review squad memory --agent security_agent
+      arch-review squad memory --reset              # reset to defaults (caution!)
+    """
+    from arch_review.squad.memory import DEFAULT_MEMORY_DIR, AgentMemory, SquadMemory
+
+    mem_dir = memory_dir or DEFAULT_MEMORY_DIR
+    agents = ["security_agent", "reliability_agent", "cost_agent",
+              "observability_agent", "synthesizer_agent"]
+
+    if reset:
+        if not click.confirm("⚠️  Reset ALL agent memories to defaults? Lessons will be lost."):
+            return
+        for a in agents:
+            mem_file = mem_dir / f"{a}.md"
+            if mem_file.exists():
+                mem_file.unlink()
+                AgentMemory(a, mem_dir)  # re-creates with template
+        squad_file = mem_dir / "SQUAD_MEMORY.md"
+        if squad_file.exists():
+            squad_file.unlink()
+            SquadMemory(mem_dir)
+        console.print("[green]✓ All memories reset to defaults.[/green]")
+        return
+
+    if agent:
+        mem = AgentMemory(agent, mem_dir)
+        console.print(f"\n[bold cyan]{agent}[/bold cyan] memory at [dim]{mem.agent_file}[/dim]\n")
+        console.print(mem.read())
+        return
+
+    # Show overview
+    console.print(f"\n[bold]Agent memory files[/bold] in [dim]{mem_dir}[/dim]\n")
+    for a in agents:
+        mem_file = mem_dir / f"{a}.md"
+        exists = "✓" if mem_file.exists() else "○"
+        size = f"{mem_file.stat().st_size}b" if mem_file.exists() else "not created"
+        console.print(f"  {exists}  [cyan]{a}.md[/cyan]  [dim]{size}[/dim]")
+
+    squad_file = mem_dir / "SQUAD_MEMORY.md"
+    exists = "✓" if squad_file.exists() else "○"
+    size = f"{squad_file.stat().st_size}b" if squad_file.exists() else "not created"
+    console.print(f"  {exists}  [yellow]SQUAD_MEMORY.md[/yellow]  [dim]{size}[/dim]")
+    console.print("\n[dim]Run 'arch-review squad memory --agent <name>' to read a specific file.[/dim]")

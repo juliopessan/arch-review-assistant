@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-03-18
+
+### Added
+- `ReviewSquad` — 4 specialized agents running in parallel via `asyncio`
+  - `SecurityAgent` — OWASP, auth, secrets, compliance, attack vectors
+  - `ReliabilityAgent` — SPOFs, resilience, cascading failures, RTO/RPO
+  - `CostAgent` — FinOps, right-sizing, data transfer, scaling economics
+  - `ObservabilityAgent` — logs, metrics, tracing, alerting, incident readiness
+  - `SynthesizerAgent` — deduplication, root cause grouping, cross-pattern detection
+- Memory & continuous evolution system
+  - Each agent has an `AGENT.md` file that persists lessons across reviews
+  - `SQUAD_MEMORY.md` tracks cross-agent patterns and review history
+  - Memories stored in `~/.arch-review/memory/` by default
+  - Agents inject past lessons into every new review prompt
+- `arch-review squad review` CLI command
+- `arch-review squad memory` — view, inspect, and reset agent memory files
+- 22 new tests covering memory system and squad orchestration (53 total)
+- Graceful degradation: squad continues if individual agents fail
+
 ## [0.3.0] — 2026-03-17
 
 ### Added
