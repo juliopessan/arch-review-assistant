@@ -41,3 +41,11 @@ Thumbs.db
 # Project
 .env
 *.local
+
+# Secrets & certificates — never commit
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer

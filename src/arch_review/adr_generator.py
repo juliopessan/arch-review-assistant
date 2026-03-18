@@ -23,10 +23,12 @@ class ADRGenerator:
         model: str = "claude-sonnet-4-20250514",
         temperature: float = 0.3,
         max_tokens: int = 4096,
+        litellm_kwargs: dict | None = None,
     ) -> None:
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.litellm_kwargs: dict = litellm_kwargs or {}
 
     def from_review(self, result: ReviewResult) -> ADRGenerationResult:
         """Generate ADRs from a complete ReviewResult."""
@@ -88,6 +90,7 @@ class ADRGenerator:
             ],
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            **self.litellm_kwargs,
         )
 
         raw = response.choices[0].message.content or ""

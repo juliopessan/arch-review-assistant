@@ -53,10 +53,12 @@ class ReviewEngine:
         model: str = DEFAULT_MODEL,
         temperature: float = 0.2,
         max_tokens: int = 4096,
+        litellm_kwargs: dict | None = None,
     ) -> None:
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.litellm_kwargs: dict = litellm_kwargs or {}
 
     def review(self, arch_input: ArchitectureInput) -> ReviewResult:
         """Run a full architecture review and return structured results."""
@@ -77,6 +79,7 @@ class ReviewEngine:
             ],
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            **self.litellm_kwargs,
         )
 
         raw_content = response.choices[0].message.content or ""
