@@ -2,6 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# System dependencies — Tesseract OCR is required for PDF/image extraction
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir -e ".[dev]" && \

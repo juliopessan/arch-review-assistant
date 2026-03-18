@@ -24,7 +24,14 @@ recommendation, and comes with the questions a senior architect would ask in a r
 ```bash
 pip install arch-review
 
-# Set your provider key (example: Anthropic)
+# 1. Install Tesseract OCR (required for PDF and image extraction)
+# macOS:
+brew install tesseract
+# Ubuntu/Debian:
+sudo apt-get install tesseract-ocr
+# Windows: https://github.com/UB-Mannheim/tesseract/wiki
+
+# 2. Set your provider key (example: Anthropic)
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # Review an architecture file

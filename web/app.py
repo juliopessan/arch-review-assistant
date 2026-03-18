@@ -22,7 +22,28 @@ from arch_review.engine import SUPPORTED_MODELS, ReviewEngine
 from arch_review.models import ArchitectureInput, FindingCategory, ReviewResult, Severity
 from arch_review.models_adr import ADRGenerationResult
 from arch_review.squad import ReviewSquad
-from arch_review.utils.extractor import extract_from_bytes, get_supported_formats
+
+# ── Tesseract required check (fail fast with friendly UI) ─────────────────────
+try:
+    from arch_review.utils.extractor import extract_from_bytes, get_supported_formats
+except EnvironmentError as _tess_err:
+    st.error(str(_tess_err))
+    st.markdown("""
+    **Tesseract is required** for architecture file extraction (PDF, images).
+
+    Install it and restart the app:
+    ```bash
+    # macOS
+    brew install tesseract
+
+    # Ubuntu / Debian
+    sudo apt-get install tesseract-ocr
+
+    # Windows
+    # https://github.com/UB-Mannheim/tesseract/wiki
+    ```
+    """)
+    st.stop()
 
 def esc(text: str) -> str:
     return html.escape(str(text), quote=True)
