@@ -362,111 +362,116 @@ const CW = 128; // cell width
 const CH = 152; // cell height (extra for name card)
 
 function drawDeskBack(ctx, ox, oy, working) {{
-  // Chair back
-  rect(ctx, ox+38, oy+56, 52, 4, P.chairBack);
-  rect(ctx, ox+39, oy+56, 50, 2, P.chairArm);
+  // Chair back — sits just above character
+  rect(ctx, ox+34, oy+80, 60, 5,  P.chairBack);
+  rect(ctx, ox+35, oy+80, 58, 2,  P.chairArm);
   // Armrests
-  rect(ctx, ox+34, oy+60, 8, 12, P.chairBack);
-  rect(ctx, ox+35, oy+60, 6, 2, P.chairArm);
-  rect(ctx, ox+86, oy+60, 8, 12, P.chairBack);
-  rect(ctx, ox+87, oy+60, 6, 2, P.chairArm);
+  rect(ctx, ox+30, oy+84, 8, 14,  P.chairBack);
+  rect(ctx, ox+31, oy+84, 6, 2,   P.chairArm);
+  rect(ctx, ox+90, oy+84, 8, 14,  P.chairBack);
+  rect(ctx, ox+91, oy+84, 6, 2,   P.chairArm);
   // Seat cushion
-  rect(ctx, ox+42, oy+68, 44, 14, P.chairBack);
-  rect(ctx, ox+44, oy+70, 40, 10, P.chairSeat);
+  rect(ctx, ox+38, oy+94, 52, 16, P.chairBack);
+  rect(ctx, ox+40, oy+96, 48, 12, P.chairSeat);
 
-  // Desk surface wood grain
-  const deskY = oy+4;
-  rect(ctx, ox+10, deskY, 108, 44, P.deskTop);
-  for (let row=0; row<11; row++) {{
+  // Desk surface — top portion of cell
+  const deskY = oy + 8;
+  rect(ctx, ox+8, deskY, 112, 48, P.deskTop);
+  for (let row=0; row<12; row++) {{
     const shade = row%3===0 ? P.deskL : row%3===1 ? P.deskTop : P.deskD;
-    rect(ctx, ox+10, deskY+row*4, 108, 3, shade);
+    rect(ctx, ox+8, deskY+row*4, 112, 3, shade);
   }}
-  rect(ctx, ox+10, deskY, 2, 44, P.deskD);
-  rect(ctx, ox+116, deskY, 2, 44, P.deskD);
+  // Desk side edges (depth)
+  rect(ctx, ox+8,   deskY, 2, 48, P.deskD);
+  rect(ctx, ox+118, deskY, 2, 48, P.deskD);
 
-  // Monitor frame
+  // Monitor outer frame
   ctx.fillStyle = hex(0x1A1A22);
-  ctx.beginPath(); ctx.roundRect(ox+34, oy+8, 60, 30, 2); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(ox+28, oy+10, 72, 36, 3); ctx.fill();
+  // Inner bezel
   ctx.fillStyle = hex(P.monFrame);
-  ctx.beginPath(); ctx.roundRect(ox+35, oy+9, 58, 28, 1); ctx.fill();
-
+  ctx.beginPath(); ctx.roundRect(ox+29, oy+11, 70, 34, 2); ctx.fill();
   // Screen
   ctx.fillStyle = hex(working ? P.monOn : P.monScreen);
-  if (working) ctx.globalAlpha = 0.9;
-  ctx.beginPath(); ctx.roundRect(ox+37, oy+11, 54, 24, 1); ctx.fill();
+  if (working) ctx.globalAlpha = 0.92;
+  ctx.beginPath(); ctx.roundRect(ox+31, oy+13, 66, 28, 1); ctx.fill();
   ctx.globalAlpha = 1;
 
   if (working) {{
-    // Screen content hint lines
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = '#ffffff';
-    for (let i=0;i<5;i++) {{
-      const lw = 18 + ((i*11)%24);
-      ctx.fillRect(ox+39, oy+13+i*4, lw, 1);
+    for (let i=0;i<6;i++) {{
+      const lw = 20 + ((i*13)%30);
+      ctx.fillRect(ox+33, oy+15+i*4, lw, 1);
     }}
-    ctx.globalAlpha = 1;
-    // Glow
-    ctx.globalAlpha = 0.07;
+    ctx.globalAlpha = 0.08;
     ctx.fillStyle = hex(P.monOn);
-    ctx.beginPath(); ctx.roundRect(ox+29, oy+5, 70, 38, 4); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(ox+22, oy+6, 84, 46, 5); ctx.fill();
     ctx.globalAlpha = 1;
   }}
 
-  // Reflection
-  ctx.globalAlpha = 0.08;
+  // Screen top reflection
+  ctx.globalAlpha = 0.09;
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(ox+37, oy+11, 54, 2);
+  ctx.fillRect(ox+31, oy+13, 66, 2);
   ctx.globalAlpha = 1;
-  // Webcam
-  rect(ctx, ox+63, oy+9, 2, 1, 0x222222);
-  // Chin
-  rect(ctx, ox+37, oy+35, 54, 3, P.monFrame);
-  // Stand
-  rect(ctx, ox+61, oy+38, 6, 5, P.monStand);
-  rect(ctx, ox+62, oy+39, 4, 3, 0x5A5A6A);
+
+  // Webcam dot
+  rect(ctx, ox+63, oy+11, 2, 1, 0x222222);
+
+  // Monitor chin bar
+  rect(ctx, ox+31, oy+41, 66, 4, P.monFrame);
+
+  // Stand neck
+  rect(ctx, ox+60, oy+45, 8, 8, P.monStand);
+  rect(ctx, ox+61, oy+46, 6, 6, 0x5A5A6A);
+
+  // Stand base (oval)
   ctx.fillStyle = hex(P.monStand);
-  ctx.beginPath(); ctx.roundRect(ox+52, oy+43, 24, 4, 2); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(ox+48, oy+53, 32, 5, 2); ctx.fill();
   ctx.fillStyle = '#5a5a6a';
-  ctx.beginPath(); ctx.roundRect(ox+54, oy+43, 20, 2, 1); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(ox+50, oy+53, 28, 3, 1); ctx.fill();
 }}
 
 function drawDeskFront(ctx, ox, oy) {{
-  // Desk front edge
-  rect(ctx, ox+10, oy+48, 108, 6, P.deskEdge);
-  ctx.globalAlpha = 0.25;
-  rect(ctx, ox+10, oy+53, 108, 2, 0x000000);
+  // Desk front face (3D depth)
+  rect(ctx, ox+8,  oy+56, 112, 8, P.deskEdge);
+  ctx.globalAlpha = 0.22;
+  rect(ctx, ox+8,  oy+63, 112, 2, 0x000000);
   ctx.globalAlpha = 0.08;
-  rect(ctx, ox+12, oy+55, 104, 2, 0x000000);
+  rect(ctx, ox+10, oy+65, 108, 2, 0x000000);
   ctx.globalAlpha = 1;
 
-  // Keyboard
+  // Keyboard body
   ctx.fillStyle = hex(0x3A3A42);
-  ctx.beginPath(); ctx.roundRect(ox+40, oy+48, 36, 8, 1); ctx.fill();
-  rect(ctx, ox+41, oy+48, 34, 1, 0x4A4A52);
-  // Keys
+  ctx.beginPath(); ctx.roundRect(ox+36, oy+57, 44, 9, 1); ctx.fill();
+  rect(ctx, ox+37, oy+57, 42, 1, 0x4A4A52);
+  // Key rows
   for (let row=0; row<3; row++) {{
-    for (let k=0; k<8; k++) {{
-      rect(ctx, ox+42+k*4, oy+49+row*2, 3, 1, 0x5A5A5A);
+    for (let k=0; k<9; k++) {{
+      rect(ctx, ox+38+k*4, oy+58+row*2, 3, 1, 0x5A5A5A);
     }}
   }}
-  rect(ctx, ox+50, oy+55, 12, 1, 0x5A5A5A);
+  // Spacebar
+  rect(ctx, ox+46, oy+64, 16, 1, 0x5A5A5A);
 
   // Mousepad
-  rect(ctx, ox+80, oy+46, 16, 18, 0x2A2A3A);
+  rect(ctx, ox+84, oy+55, 18, 20, 0x2A2A3A);
+  // Mouse body
   ctx.fillStyle = hex(0x3A3A42);
-  ctx.beginPath(); ctx.roundRect(ox+83, oy+48, 10, 13, 3); ctx.fill();
-  rect(ctx, ox+84, oy+48, 8, 2, 0x4A4A52);
-  rect(ctx, ox+87, oy+48, 2, 3, 0x5A5A62);
-  rect(ctx, ox+83, oy+48, 1, 13, 0x2A2A32);
+  ctx.beginPath(); ctx.roundRect(ox+87, oy+57, 12, 15, 3); ctx.fill();
+  rect(ctx, ox+88, oy+57, 10, 3, 0x4A4A52);
+  rect(ctx, ox+92, oy+57, 2, 4, 0x5A5A62);
+  rect(ctx, ox+87, oy+57, 1, 15, 0x2A2A32);
 
   // Chair pole + casters
-  rect(ctx, ox+62, oy+108, 4, 4, P.monStand);
-  const cx = ox+64, cy = oy+116;
+  rect(ctx, ox+60, oy+130, 8, 6, P.monStand);
+  const cx2 = ox+64, cy2 = oy+140;
   for (let i=0;i<5;i++) {{
     const a = i/5*Math.PI*2-Math.PI/2;
-    const wx = cx+Math.round(Math.cos(a)*16);
-    const wy = cy+Math.round(Math.sin(a)*8);
-    rect(ctx, wx-2, wy-1, 4, 3, P.monStand);
+    const wx = cx2+Math.round(Math.cos(a)*18);
+    const wy = cy2+Math.round(Math.sin(a)*9);
+    rect(ctx, wx-3, wy-1, 6, 3, P.monStand);
     rect(ctx, wx-1, wy+1, 2, 2, 0x5A5A6A);
   }}
 }}
@@ -511,64 +516,129 @@ function drawAccessories(ctx, ox, oy, agentIndex) {{
   const seed = agentIndex * 7 + 3;
   const i1 = seed % ACCESSORIES.length;
   const i2 = (seed + 2) % ACCESSORIES.length;
-  ACCESSORIES[i1](ctx, ox+14, oy+38);
-  if (i2 !== i1) ACCESSORIES[i2](ctx, ox+100, oy+38);
+  // Place on desk surface — left and right zones
+  ACCESSORIES[i1](ctx, ox+10, oy+44);
+  if (i2 !== i1) ACCESSORIES[i2](ctx, ox+102, oy+44);
 }}
 
 // ═══════════════════════════════════════════════════════
-//  NAME CARD (drawn above cell, Y < 0 relative to cell)
+//  NAME CARD — floats ABOVE cell (drawn in cell-local space, negative Y)
 // ═══════════════════════════════════════════════════════
 function drawNameCard(ctx, ox, oy, agent, statusStr) {{
-  const nm = LANG === 'pt' ? agent.nm_pt : agent.nm_en;
-  const cardW = Math.max(90, nm.length * 8 + 52);
-  const cardH = 22;
+  const nm    = LANG === 'pt' ? agent.nm_pt : agent.nm_en;
+  const cardW = Math.max(88, nm.length * 7 + 48);
+  const cardH = 20;
   const cardX = ox + (CW - cardW) / 2;
-  const cardY = oy - 26;
+  const cardY = oy - 28;  // above cell top
 
   // Shadow
-  ctx.globalAlpha = 0.28;
-  rrect(ctx, cardX+1, cardY+2, cardW, cardH, 8, 0x000000);
-  ctx.globalAlpha = 1;
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  rrect(ctx, cardX+1, cardY+2, cardW, cardH, 7, 0x000000);
 
   // Background
-  rrect(ctx, cardX, cardY, cardW, cardH, 8, P.cardBg, 0.92);
+  ctx.globalAlpha = 0.93;
+  rrect(ctx, cardX, cardY, cardW, cardH, 7, P.cardBg);
+  ctx.restore();
 
   // Pointer triangle
-  ctx.globalAlpha = 0.92;
+  ctx.save();
+  ctx.globalAlpha = 0.93;
   ctx.fillStyle = hex(P.cardBg);
   const tx = ox + CW/2;
   ctx.beginPath();
-  ctx.moveTo(tx-5, cardY+cardH);
-  ctx.lineTo(tx, cardY+cardH+5);
-  ctx.lineTo(tx+5, cardY+cardH);
+  ctx.moveTo(tx-4, cardY+cardH);
+  ctx.lineTo(tx,   cardY+cardH+5);
+  ctx.lineTo(tx+4, cardY+cardH);
   ctx.closePath();
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.restore();
 
   // Status dot
   const dotColor = statusStr==='running' ? P.dotRunning
-    : statusStr==='done' ? P.dotDone
-    : statusStr==='error' ? P.dotError
+    : statusStr==='done'    ? P.dotDone
+    : statusStr==='error'   ? P.dotError
     : P.dotIdle;
-  const dotX = cardX + cardW - 14;
-  const dotY = cardY + cardH/2;
+  const dotX = cardX + cardW - 13;
+  const dotY = cardY + cardH / 2;
+
   if (statusStr === 'running' || statusStr === 'done') {{
-    ctx.globalAlpha = 0.25;
+    ctx.save();
+    ctx.globalAlpha = 0.22;
     ctx.fillStyle = hex(dotColor);
     ctx.beginPath(); ctx.arc(dotX, dotY, 6, 0, Math.PI*2); ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.restore();
+  }}
+  ctx.fillStyle = hex(dotColor);
+  ctx.beginPath(); ctx.arc(dotX, dotY, 3, 0, Math.PI*2); ctx.fill();
+
+  // Emoji
+  ctx.font = '10px serif';
+  ctx.fillText(agent.ic, cardX + 5, cardY + 14);
+
+  // Name
+  ctx.font = '600 10px -apple-system,system-ui,sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(nm, cardX + 20, cardY + 14);
+}}
+
+// ═══════════════════════════════════════════════════════
+//  NAME CARD — rendered in unscaled canvas coords
+//  cx,cy = cell top-left in canvas pixels; cw = cell width
+// ═══════════════════════════════════════════════════════
+function drawNameCardCanvas(ctx, cx, cy, cw, agent, statusStr) {{
+  const nm    = LANG === 'pt' ? agent.nm_pt : agent.nm_en;
+  const cardW = Math.max(80, nm.length * 7 + 46);
+  const cardH = 22;
+  const cardX = cx + (cw - cardW) / 2;
+  const cardY = cy - cardH - 8;   // 8px gap above cell top
+
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  rrect(ctx, cardX+1, cardY+2, cardW, cardH, 7, 0x000000);
+  ctx.restore();
+
+  // Background
+  rrect(ctx, cardX, cardY, cardW, cardH, 7, P.cardBg, 0.93);
+
+  // Pointer triangle
+  ctx.save();
+  ctx.globalAlpha = 0.93;
+  ctx.fillStyle = hex(P.cardBg);
+  const tx = cx + cw / 2;
+  ctx.beginPath();
+  ctx.moveTo(tx-5, cardY+cardH);
+  ctx.lineTo(tx,   cardY+cardH+6);
+  ctx.lineTo(tx+5, cardY+cardH);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Status dot
+  const dotColor = statusStr==='running' ? P.dotRunning
+    : statusStr==='done'  ? P.dotDone
+    : statusStr==='error' ? P.dotError
+    : P.dotIdle;
+  const dotX = cardX + cardW - 13;
+  const dotY = cardY + cardH / 2;
+
+  if (statusStr === 'running' || statusStr === 'done') {{
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = hex(dotColor);
+    ctx.beginPath(); ctx.arc(dotX, dotY, 7, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
   }}
   ctx.fillStyle = hex(dotColor);
   ctx.beginPath(); ctx.arc(dotX, dotY, 3.5, 0, Math.PI*2); ctx.fill();
 
-  // Emoji
+  // Emoji + Name
   ctx.font = '11px serif';
-  ctx.fillText(agent.ic, cardX+6, cardY+15);
-
-  // Name
+  ctx.fillText(agent.ic, cardX + 6, cardY + 15);
   ctx.font = '600 11px -apple-system,system-ui,sans-serif';
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(nm, cardX+22, cardY+15);
+  ctx.fillText(nm, cardX + 22, cardY + 15);
 }}
 
 // ═══════════════════════════════════════════════════════
@@ -592,24 +662,26 @@ function drawRoom(ctx, W, H) {{
 // ═══════════════════════════════════════════════════════
 //  MAIN RENDER
 // ═══════════════════════════════════════════════════════
-const SCALE  = 2;      // CSS scale (retina)
-const COLS   = 3;      // agents per row (manager + 3 specialists in row 1, 2 remaining in row 2, synth in row 3)
-const PAD    = 16;     // horizontal padding
-const GAP    = 8;      // gap between cells
+const PAD      = 16;   // outer horizontal + vertical padding
+const GAP      = 10;   // gap between cells
+const CARD_TOP = 36;   // pixels reserved above each row for name cards
 
-// Layout: Row 0 = manager (centered, wider)
-//         Row 1 = security, reliability, cost, observability (4 cells)
-//         Row 2 = synthesizer (centered)
-const LAYOUTS = [
-  // [col, row, agentIndex in AGENTS]
-  [1, 0, 0],  // manager — row 0, center of 3
-  [0, 1, 1],  // security
-  [1, 1, 2],  // reliability
-  [2, 1, 3],  // cost
-  [3, 1, 4],  // observability
-  [1.5, 2, 5], // synthesizer — centered between col 1 and 2
-];
+// Uniform 4-column grid — all agents get the same cell size
+// Row 0: manager   (cols 1-2, i.e. centered across middle 2 of 4)
+// Row 1: security, reliability, cost, observability  (cols 0-3)
+// Row 2: synthesizer (cols 1-2, centered)
 const TOTAL_COLS = 4;
+
+// [startCol, endCol, row, agentIndex]
+// startCol/endCol define which columns the cell spans (for centering wide cells)
+const LAYOUTS = [
+  [1, 2, 0, 0],   // manager    — spans cols 1-2 (center 2 of 4)
+  [0, 0, 1, 1],   // security
+  [1, 1, 1, 2],   // reliability
+  [2, 2, 1, 3],   // cost
+  [3, 3, 1, 4],   // observability
+  [1, 2, 2, 5],   // synthesizer — spans cols 1-2 (center 2 of 4)
+];
 
 let animFrame = 0;
 let animTimer = null;
@@ -618,14 +690,15 @@ function render() {{
   const canvas = document.getElementById('scene-canvas');
   if (!canvas) return;
 
-  const availW = canvas.parentElement.clientWidth || 800;
-  const cellW  = Math.floor((availW - PAD*2 - GAP*(TOTAL_COLS-1)) / TOTAL_COLS);
-  const cellH  = Math.round(cellW * CH / CW);
-  const totalW = TOTAL_COLS * cellW + (TOTAL_COLS-1)*GAP + PAD*2;
-  const totalH = 3 * cellH + 2*GAP + PAD*2 + 32; // +32 for name card overflow
+  const availW  = canvas.parentElement.clientWidth || 800;
+  const cellW   = Math.floor((availW - PAD*2 - GAP*(TOTAL_COLS-1)) / TOTAL_COLS);
+  const cellH   = Math.round(cellW * 1.1);  // fixed aspect ratio ~1:1.1
+  const totalW  = TOTAL_COLS * cellW + (TOTAL_COLS-1)*GAP + PAD*2;
+  const ROWS    = 3;
+  const totalH  = ROWS * cellH + (ROWS-1)*GAP + PAD*2 + CARD_TOP;
 
-  canvas.width  = totalW;
-  canvas.height = totalH;
+  canvas.width        = totalW;
+  canvas.height       = totalH;
   canvas.style.width  = totalW + 'px';
   canvas.style.height = totalH + 'px';
 
@@ -634,70 +707,76 @@ function render() {{
   ctx.clearRect(0, 0, totalW, totalH);
   drawRoom(ctx, totalW, totalH);
 
-  LAYOUTS.forEach(([col, row, agIdx]) => {{
-    const agent  = AGENTS[agIdx];
-    const stData = AGENT_STATES[agent.key] || {{status:'idle', count:0}};
-    const status = stData.status || 'idle';
+  LAYOUTS.forEach(([startCol, endCol, row, agIdx]) => {{
+    const agent   = AGENTS[agIdx];
+    const stData  = AGENT_STATES[agent.key] || {{status:'idle', count:0}};
+    const status  = stData.status || 'idle';
     const isRunning = status === 'running';
     const isDone    = status === 'done';
     const isError   = status === 'error';
 
-    // Cell pixel position
-    const cx = PAD + col * (cellW + GAP);
-    const cy = PAD + 32 + row * (cellH + GAP); // +32 for name card top overflow
+    // Compute cell rect — may span multiple columns
+    const spanCols = endCol - startCol + 1;
+    const cx = PAD + startCol * (cellW + GAP);
+    const cy = PAD + CARD_TOP + row * (cellH + GAP);
+    const cw = spanCols * cellW + (spanCols - 1) * GAP;
+    const ch = cellH;
 
-    // Cell background with status tint
+    // Cell background
     ctx.save();
-    if (isRunning) {{
-      rrect(ctx, cx, cy, cellW, cellH, 6, 0xF5F3FF, 0.9);
-      ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.roundRect(cx, cy, cellW, cellH, 6); ctx.stroke();
-    }} else if (isDone) {{
-      rrect(ctx, cx, cy, cellW, cellH, 6, 0xF0FDF4, 0.9);
-      ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.roundRect(cx, cy, cellW, cellH, 6); ctx.stroke();
-    }} else if (isError) {{
-      rrect(ctx, cx, cy, cellW, cellH, 6, 0xFEF2F2, 0.9);
-      ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.roundRect(cx, cy, cellW, cellH, 6); ctx.stroke();
-    }} else {{
-      rrect(ctx, cx, cy, cellW, cellH, 6, 0xFFFFFF, isRunning ? 1 : 0.7);
-      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(cx, cy, cellW, cellH, 6); ctx.stroke();
-    }}
+    const borderColor = isRunning ? '#6366f1' : isDone ? '#16a34a' : isError ? '#dc2626' : '#e5e7eb';
+    const bgColor = isRunning ? 0xF5F3FF : isDone ? 0xF0FDF4 : isError ? 0xFEF2F2 : 0xFFFFFF;
+    const bgAlpha = isRunning || isDone || isError ? 0.92 : 0.75;
+    rrect(ctx, cx, cy, cw, ch, 8, bgColor, bgAlpha);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isRunning || isDone || isError ? 1.5 : 1;
+    ctx.beginPath(); ctx.roundRect(cx, cy, cw, ch, 8); ctx.stroke();
     ctx.restore();
 
-    // Scale context into cell
+    // Scale context to cell: always map CW×CH virtual units → cw×ch pixels
     ctx.save();
     ctx.translate(cx, cy);
-    const scaleX = cellW / CW;
-    const scaleY = cellH / CH;
+    const scaleX = cw / CW;
+    const scaleY = ch / CH;
     ctx.scale(scaleX, scaleY);
 
-    // Draw workstation back layer
-    drawDeskBack(ctx, 0, 8, isRunning); // shifted down 8px from cell top
+    // Clip to cell bounds (prevent overdraw)
+    ctx.beginPath();
+    ctx.rect(0, 0, CW, CH);
+    ctx.clip();
 
-    // Draw character sprite
-    const pose  = isDone ? 'done' : isRunning ? 'working' : 'idle';
-    const frame = isRunning ? animFrame : 0;
+    // Draw layers
+    drawDeskBack(ctx, 0, 0, isRunning);
+
+    const pose   = isDone ? 'done' : isRunning ? 'working' : 'idle';
+    const frame  = isRunning ? animFrame : 0;
     const charCvs = makeCharCanvas(agent.variant, pose, frame);
-    const charX = (CW - 48) / 2; // centered
-    const charY = 66; // character Y in unscaled cell coords
+    // Character sits at vertical center of lower half of cell
+    const charX = (CW - 48) / 2;
+    const charY = Math.round(CH * 0.45);
     ctx.drawImage(charCvs, charX, charY, 48, 48);
 
-    // Draw workstation front layer
-    drawDeskFront(ctx, 0, 8);
-    drawAccessories(ctx, 0, 8, agIdx);
-
-    // Draw name card (above cell, negative Y)
-    drawNameCard(ctx, 0, 8, agent, status);
+    drawDeskFront(ctx, 0, 0);
+    drawAccessories(ctx, 0, 0, agIdx);
 
     ctx.restore();
 
-    // Finding count badge
+    // ── Name card: drawn in UNSCALED canvas space (above cell, no clip) ───────
+    drawNameCardCanvas(ctx, cx, cy, cw, agent, status);
+
+    // Finding count badge (in canvas pixels, not scaled)
     if (stData.count > 0) {{
-      const badgeX = cx + cellW - 22;
-      const badgeY = cy + 4;
+      const badgeX = cx + cw - 24;
+      const badgeY = cy + 5;
+      rrect(ctx, badgeX, badgeY, 20, 16, 8, 0x4F46E5, 1);
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(stData.count, badgeX+10, badgeY+11);
+      ctx.textAlign = 'left';
+    }}
+  }});
+}}
       rrect(ctx, badgeX, badgeY, 20, 16, 8, 0x4F46E5, 1);
       ctx.font = 'bold 10px sans-serif';
       ctx.fillStyle = '#fff';
