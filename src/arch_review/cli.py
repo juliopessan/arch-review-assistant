@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from arch_review import __version__
 from arch_review.engine import DEFAULT_MODEL, SUPPORTED_MODELS, ReviewEngine
 from arch_review.models import ArchitectureInput, FindingCategory
 from arch_review.output import print_review
+from arch_review.telemetry import log_cli_event, read_cli_history
 
 console = Console()
 err_console = Console(stderr=True)
@@ -22,6 +24,11 @@ def _list_models() -> str:
     for model, provider in SUPPORTED_MODELS.items():
         lines.append(f"  [{provider}] {model}")
     return "\n".join(lines)
+
+
+def _log_cli(action: str, **details: object) -> None:
+    """Best-effort CLI telemetry wrapper."""
+    log_cli_event(action, details)
 
 
 @click.group()
@@ -153,9 +160,11 @@ def review(
     try:
         result = engine.review(arch_input)
     except ValueError as exc:
+        _log_cli("review", status="error", model=model, reason="value_error")
         err_console.print(f"[red]Review failed:[/red] {exc}")
         raise SystemExit(1) from exc
     except Exception as exc:
+        _log_cli("review", status="error", model=model, reason="unexpected_error")
         err_console.print(f"[red]Unexpected error:[/red] {exc}")
         raise SystemExit(1) from exc
 
@@ -172,6 +181,15 @@ def review(
         console.print(f"\n[green]Report saved to:[/green] {output_file}")
     else:
         print_review(result, output_format=output)
+
+    _log_cli(
+        "review",
+        status="success",
+        model=model,
+        findings=result.summary.total_findings,
+        criticals=result.summary.critical_count,
+        output=output,
+    )
 
     # Exit with non-zero if critical findings
     if result.summary.critical_count > 0:
@@ -287,6 +305,7 @@ def adr_generate(
     try:
         adr_result = generator.from_review(result)
     except Exception as exc:
+        _log_cli("adr_generate", status="error", model=model)
         err_console.print(f"[red]ADR generation failed:[/red] {exc}")
         raise SystemExit(1) from exc
 
@@ -305,6 +324,13 @@ def adr_generate(
             f"Commit them with:\n\n"
             f"  [dim]git add {output_dir} && git commit -m 'docs: add ADRs from architecture review'[/dim]\n"
         )
+    _log_cli(
+        "adr_generate",
+        status="success",
+        model=model,
+        total_generated=adr_result.total_generated,
+        preview=preview,
+    )
 
 
 @main.command()
@@ -423,6 +449,7 @@ def squad_review(
     try:
         result = squad_engine.review(arch_input)
     except Exception as exc:
+        _log_cli("squad_review", status="error", model=model)
         err_console.print(f"[red]Squad review failed:[/red] {exc}")
         raise SystemExit(1) from exc
 
@@ -434,6 +461,21 @@ def squad_review(
         console.print(f"\n[green]Report saved to:[/green] {output_file}")
     else:
         print_review(result, output_format=output)
+
+    orchestration_plan = result.orchestration_plan
+    active_agents = (
+        len([plan for plan in orchestration_plan.agent_plans if plan.active])
+        if orchestration_plan
+        else 4
+    )
+    _log_cli(
+        "squad_review",
+        status="success",
+        model=model,
+        findings=result.summary.total_findings,
+        criticals=result.summary.critical_count,
+        active_agents=active_agents,
+    )
 
     if result.summary.critical_count > 0:
         raise SystemExit(2)
@@ -456,7 +498,7 @@ def squad_memory_cmd(memory_dir: Path | None, agent: str | None, reset: bool) ->
 
     mem_dir = memory_dir or DEFAULT_MEMORY_DIR
     agents = ["security_agent", "reliability_agent", "cost_agent",
-              "observability_agent", "synthesizer_agent"]
+              "observability_agent", "manager_agent", "synthesizer_agent"]
 
     if reset:
         if not click.confirm("⚠️  Reset ALL agent memories to defaults? Lessons will be lost."):
@@ -471,6 +513,7 @@ def squad_memory_cmd(memory_dir: Path | None, agent: str | None, reset: bool) ->
             squad_file.unlink()
             SquadMemory(mem_dir)
         console.print("[green]✓ All memories reset to defaults.[/green]")
+        _log_cli("memory_reset", status="success", path=str(mem_dir))
         return
 
     if agent:
@@ -492,3 +535,28 @@ def squad_memory_cmd(memory_dir: Path | None, agent: str | None, reset: bool) ->
     size = f"{squad_file.stat().st_size}b" if squad_file.exists() else "not created"
     console.print(f"  {exists}  [yellow]SQUAD_MEMORY.md[/yellow]  [dim]{size}[/dim]")
     console.print("\n[dim]Run 'arch-review squad memory --agent <name>' to read a specific file.[/dim]")
+
+
+@main.command("history")
+@click.option("--action", default=None, help="Filter by action (review, squad_review, adr_generate, memory_reset).")
+@click.option("--limit", default=20, show_default=True, type=int, help="Maximum number of entries to show.")
+@click.option("--json-output", is_flag=True, default=False, help="Print raw JSON instead of formatted terminal output.")
+def history_cmd(action: str | None, limit: int, json_output: bool) -> None:
+    """Show recent arch-review CLI execution history."""
+    entries = read_cli_history(action=action, limit=limit)
+    if json_output:
+        console.print_json(json.dumps(entries, ensure_ascii=False, indent=2))
+        return
+    if not entries:
+        console.print("\n[yellow]No CLI history found yet.[/yellow]\n")
+        return
+
+    console.print("\n[bold]Recent CLI history[/bold]\n")
+    for entry in entries:
+        details = entry.get("details", {})
+        pretty_details = ", ".join(f"{key}={value}" for key, value in details.items()) or "no details"
+        console.print(
+            f"• [cyan]{entry.get('action', 'unknown')}[/cyan] "
+            f"[dim]{entry.get('timestamp', 'unknown time')}[/dim] — {pretty_details}"
+        )
+    console.print()

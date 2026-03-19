@@ -22,7 +22,6 @@ from arch_review.adr_generator import ADRGenerator
 from arch_review.engine import SUPPORTED_MODELS, ReviewEngine
 from arch_review.models import ArchitectureInput, FindingCategory, ReviewResult, Severity
 from arch_review.models_adr import ADRGenerationResult
-from arch_review.squad import ReviewSquad
 from i18n import get_t, TRANSLATIONS
 
 # ── Language selection (must happen before t() is called) ─────────────────────
@@ -125,6 +124,7 @@ code { background: #f5f3ff !important; color: #4338ca !important; border-radius:
 SEV_CSS  = {Severity.CRITICAL:"critical",Severity.HIGH:"high",Severity.MEDIUM:"medium",Severity.LOW:"low",Severity.INFO:"info"}
 SEV_PILL = {Severity.CRITICAL:"pill-critical",Severity.HIGH:"pill-high",Severity.MEDIUM:"pill-medium",Severity.LOW:"pill-low",Severity.INFO:"pill-info"}
 ENV_MAP  = {"anthropic":"ANTHROPIC_API_KEY","openai":"OPENAI_API_KEY","google":"GEMINI_API_KEY","mistral":"MISTRAL_API_KEY"}
+PRIORITY_PILL = {"critical":"pill-critical","high":"pill-high","medium":"pill-medium","low":"pill-low"}
 
 EXAMPLE = """# E-commerce Order Processing System
 
@@ -168,6 +168,10 @@ def rand_msgs(lang: str) -> dict:
 
 def rand_msg(pool: list[str]) -> str:
     return random.choice(pool) if pool else "Loading..."
+
+def priority_badge(priority: str) -> str:
+    css = PRIORITY_PILL.get(priority.lower(), "pill-info")
+    return f'<span class="pill {css}">{esc(priority)}</span>'
 
 def _build_md(r: ReviewResult) -> str:
     s = r.summary
@@ -371,6 +375,7 @@ with tab_squad:
     st.caption(t("squad.caption"))
 
     AGENTS = {
+        "manager_agent":       {"ic":"🎯","nm":"Agent Manager",              "ds":"Classify context, prioritize agents, inject focus"},
         "security_agent":      {"ic":"🔐","nm":t("agent.security.nm"),     "ds":t("agent.security.ds")},
         "reliability_agent":   {"ic":"🛡️","nm":t("agent.reliability.nm"),   "ds":t("agent.reliability.ds")},
         "cost_agent":          {"ic":"💰","nm":t("agent.cost.nm"),           "ds":t("agent.cost.ds")},
@@ -389,10 +394,17 @@ with tab_squad:
         if any(v["event"]=="start" for v in evts): return "running", t("squad.running"), 0
         return "idle", t("squad.idle"), 0
 
-    spec = list(AGENTS.keys())[:4]
-    synth = list(AGENTS.keys())[4]
-    cols9 = st.columns(9)
-    ac = [cols9[0], cols9[2], cols9[4], cols9[6]]
+    spec = ["security_agent", "reliability_agent", "cost_agent", "observability_agent"]
+    synth = "synthesizer_agent"
+    manager = "manager_agent"
+    cols11 = st.columns(11)
+    ac = [cols11[2], cols11[4], cols11[6], cols11[8]]
+
+    with cols11[0]:
+        a = AGENTS[manager]; css, st_, cnt = _state(manager)
+        st.markdown(f'<div class="agentcard {css}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="ds">{a["ds"]}</div><div class="st">{st_}</div></div>', unsafe_allow_html=True)
+    with cols11[1]:
+        st.markdown('<div class="arrow" style="padding-top:22px">→</div>', unsafe_allow_html=True)
 
     for i, name in enumerate(spec):
         a = AGENTS[name]; css, st_, cnt = _state(name)
@@ -400,7 +412,7 @@ with tab_squad:
         with ac[i]:
             st.markdown(f'<div class="agentcard {css}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="ds">{a["ds"]}</div><div class="st">{st_}</div>{cnt_html}</div>', unsafe_allow_html=True)
         if i < 3:
-            with cols9[i*2+1]:
+            with cols11[(i+1)*2+1]:
                 st.markdown('<div class="arrow" style="padding-top:22px">→</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -421,6 +433,7 @@ with tab_squad:
 
         def _run(q):
             import asyncio, json as _j
+            from arch_review.squad.manager import AgentManager as _MG
             from arch_review.squad.squad import ReviewSquad as _SQ, AgentResult as _AR
             from arch_review.squad.prompts import build_synthesizer_prompt as _bsp, SYNTHESIZER_SYSTEM as _SS
             from arch_review.utils.json_parser import sanitize_architecture_input as _san
@@ -428,12 +441,22 @@ with tab_squad:
 
             async def _a():
                 sq = _SQ(model=selected_model)
+                mg = _MG()
                 arch = _san(arch_inp.description); ctx = arch_inp.context or ""
                 sp = sq.squad_memory.get_recurring_patterns()
+                plan = mg.create_plan(arch_inp)
+                q.put({"event":"start","agent":"manager_agent","plan":plan.model_dump()})
+                q.put({"event":"done","agent":"manager_agent","count":len(plan.top_risks),"plan":plan.model_dump()})
+                active_agents = {item.agent_name for item in plan.agent_plans if item.active}
                 tasks = []
                 for nm, sys_p, pfn in sq.AGENTS:
+                    if nm not in active_agents:
+                        q.put({"event":"done","agent":nm,"count":0,"skipped":True})
+                        continue
                     q.put({"event":"start","agent":nm})
-                    tasks.append((nm, sys_p, pfn(arch, ctx, sq.agent_memories[nm].get_lessons_section(), sp)))
+                    prompt = pfn(arch, ctx, sq.agent_memories[nm].get_lessons_section(), sp)
+                    prompt = sq._inject_manager_guidance(prompt, plan, nm)
+                    tasks.append((nm, sys_p, prompt))
 
                 async def _call(nm, sys_p, prompt):
                     try:
@@ -471,8 +494,8 @@ with tab_squad:
                 sm2 = sq._build_summary(ff, sd.get("overall_assessment",""))
                 rv = _RR(input=arch_inp, findings=ff, summary=sm2,
                     senior_architect_questions=sd.get("senior_architect_questions",[]),
-                    recommended_adrs=sd.get("recommended_adrs",[]), model_used=f"squad:{sq.model}")
-                sq._update_memories(ars, sd.get("lesson_for_memory",""), arch[:100], sd.get("cross_patterns",[]), sm2)
+                    recommended_adrs=sd.get("recommended_adrs",[]), orchestration_plan=plan, model_used=f"squad:{sq.model}")
+                sq._update_memories(ars, sd.get("lesson_for_memory",""), arch[:100], sd.get("cross_patterns",[]), sm2, plan)
                 q.put({"event":"result","result":rv})
 
             asyncio.run(_a())
@@ -505,6 +528,20 @@ with tab_squad:
             s = r.summary
             st.success(f"{t('squad.complete')} **{s.total_findings} {t('squad.total_findings')}** · {s.critical_count} {t('squad.critical')} · {s.high_count} {t('squad.high')}")
             if s.top_risk: st.warning(f"{t('squad.top_risk')} **{esc(s.top_risk)}**")
+            if r.orchestration_plan:
+                plan = r.orchestration_plan
+                with st.expander("🎯 Agent Manager Plan", expanded=True):
+                    st.markdown(f"**Architecture type:** {esc(plan.architecture_type)}")
+                    st.markdown(f"**Complexity:** {esc(plan.complexity)}")
+                    if plan.compliance_flags:
+                        st.markdown(f"**Compliance:** {esc(', '.join(plan.compliance_flags))}")
+                    if plan.cloud_providers:
+                        st.markdown(f"**Cloud:** {esc(', '.join(plan.cloud_providers))}")
+                    if plan.top_risks:
+                        st.markdown("**Top pre-review risks:**")
+                        for risk in plan.top_risks:
+                            st.markdown(f"- {esc(risk)}")
+                    st.caption(plan.manager_briefing)
             st.info(t("review.squad.trigger"))
     else:
         st.info(t("squad.no_result"))
@@ -530,6 +567,36 @@ with tab_findings:
         </div>
         """, unsafe_allow_html=True)
         st.caption(f"{t('findings.model')} `{r.model_used}`")
+
+        if r.orchestration_plan:
+            plan = r.orchestration_plan
+            with st.expander("🎯 Agent Manager Plan", expanded=False):
+                st.markdown(f"**Briefing:** {esc(plan.manager_briefing)}")
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown(f"**Architecture type:** {esc(plan.architecture_type)}")
+                    st.markdown(f"**Complexity:** {esc(plan.complexity)}")
+                    if plan.compliance_flags:
+                        st.markdown(f"**Compliance flags:** {esc(', '.join(plan.compliance_flags))}")
+                with c2:
+                    if plan.cloud_providers:
+                        st.markdown(f"**Cloud providers:** {esc(', '.join(plan.cloud_providers))}")
+                    if plan.top_risks:
+                        st.markdown("**Top detected risks before execution:**")
+                        for risk in plan.top_risks:
+                            st.markdown(f"- {esc(risk)}")
+
+                st.markdown("**Per-agent focus**")
+                for agent_plan in plan.agent_plans:
+                    st.markdown(
+                        f"{priority_badge(agent_plan.priority)} **{esc(agent_plan.agent_name)}** — {esc(agent_plan.rationale)}",
+                        unsafe_allow_html=True,
+                    )
+                    for area in agent_plan.focus_areas:
+                        st.markdown(f"  - {esc(area)}")
+                skipped = [item.agent_name for item in plan.agent_plans if not item.active]
+                if skipped:
+                    st.markdown(f"**Skipped agents:** {esc(', '.join(skipped))}")
 
         if s.overall_assessment:
             with st.expander(t("findings.assessment"), expanded=True):
@@ -641,8 +708,9 @@ with tab_export:
 with tab_memory:
     from arch_review.squad.memory import DEFAULT_MEMORY_DIR, AgentMemory, SquadMemory
     mem   = DEFAULT_MEMORY_DIR
-    alist = ["security_agent","reliability_agent","cost_agent","observability_agent","synthesizer_agent"]
+    alist = ["manager_agent","security_agent","reliability_agent","cost_agent","observability_agent","synthesizer_agent"]
     AGENT_META_MEM = {
+        "manager_agent":       {"ic":"🎯","nm":"Agent Manager"},
         "security_agent":      {"ic":"🔐","nm":t("agent.security.nm")},
         "reliability_agent":   {"ic":"🛡️","nm":t("agent.reliability.nm")},
         "cost_agent":          {"ic":"💰","nm":t("agent.cost.nm")},
@@ -654,7 +722,7 @@ with tab_memory:
     st.caption(t("memory.caption"))
 
     # ── Agent status cards ─────────────────────────────────────────────────────
-    mcols = st.columns(5)
+    mcols = st.columns(6)
     for i, nm in enumerate(alist):
         a = AGENT_META_MEM[nm]; f = mem / f"{nm}.md"
         exists = f.exists()
@@ -708,7 +776,7 @@ with tab_memory:
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(t("memory.evo.agent_title"))
-        acols = st.columns(5)
+        acols = st.columns(6)
         for i, nm in enumerate(alist):
             a     = AGENT_META_MEM[nm]
             stats = AgentMemory(nm, mem).get_stats()

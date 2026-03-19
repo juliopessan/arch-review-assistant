@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from arch_review.models import ArchitectureInput, Severity
+from arch_review.squad.manager import AgentManager
 from arch_review.squad.memory import AgentMemory, SquadMemory
 from arch_review.squad.squad import ReviewSquad
 
@@ -142,9 +143,39 @@ class TestSquadMemory:
 # ── Squad tests ───────────────────────────────────────────────────────────────
 
 class TestReviewSquad:
+    def test_agent_manager_creates_orchestration_plan(self) -> None:
+        manager = AgentManager()
+        plan = manager.create_plan(
+            ArchitectureInput(
+                description=(
+                    "API Gateway routes to microservices. RabbitMQ handles events. "
+                    "Logs written to local files. Single EC2 instance. JWT auth."
+                ),
+                context="LGPD compliance required on AWS",
+            )
+        )
+
+        assert plan.architecture_type in {"event-driven distributed system", "microservices platform"}
+        assert plan.complexity in {"medium", "high"}
+        assert "LGPD" in plan.compliance_flags
+        assert "aws" in plan.cloud_providers
+        assert len(plan.agent_plans) == 4
+
+    def test_agent_manager_can_skip_cost_agent_for_on_prem(self) -> None:
+        manager = AgentManager()
+        plan = manager.create_plan(
+            ArchitectureInput(
+                description="Monolith deployed on-prem in a private datacenter with bare metal servers.",
+            )
+        )
+
+        cost_plan = next(item for item in plan.agent_plans if item.agent_name == "cost_agent")
+        assert cost_plan.active is False
+        assert cost_plan.priority == "low"
+
     def test_init_creates_memories(self, tmp_path: Path) -> None:
         sq = ReviewSquad(model="claude-sonnet-4-20250514", memory_dir=tmp_path)
-        assert len(sq.agent_memories) == 5  # 4 agents + synthesizer
+        assert len(sq.agent_memories) == 6  # manager + 4 agents + synthesizer
         assert sq.squad_memory is not None
 
     def test_parse_json_valid(self, tmp_path: Path) -> None:
@@ -205,6 +236,8 @@ class TestReviewSquad:
         assert result.summary.critical_count >= 1
         assert "squad:" in result.model_used
         assert len(result.senior_architect_questions) > 0
+        assert result.orchestration_plan is not None
+        assert len(result.orchestration_plan.agent_plans) == 4
         assert mock_completion.call_count == 5
 
     @patch("arch_review.squad.squad.litellm.completion")
@@ -224,6 +257,8 @@ class TestReviewSquad:
         # Lessons should be appended to at least one agent file
         security_content = (tmp_path / "security_agent.md").read_text()
         assert "Always check inter-service auth" in security_content
+        manager_content = (tmp_path / "manager_agent.md").read_text()
+        assert "Classified" in manager_content
 
         # Squad memory should have a review entry
         squad_content = (tmp_path / "SQUAD_MEMORY.md").read_text()

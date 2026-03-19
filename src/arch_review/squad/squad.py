@@ -15,10 +15,12 @@ from arch_review.models import (
     ArchitectureInput,
     Finding,
     FindingCategory,
+    OrchestrationPlanSnapshot,
     ReviewResult,
     ReviewSummary,
     Severity,
 )
+from arch_review.squad.manager import AgentManager
 from arch_review.squad.memory import AgentMemory, SquadMemory
 from arch_review.squad.prompts import (
     COST_SYSTEM,
@@ -91,8 +93,10 @@ class ReviewSquad:
             name: AgentMemory(name, memory_dir)
             for name, _, _ in self.AGENTS
         }
+        self.agent_memories["manager_agent"] = AgentMemory("manager_agent", memory_dir)
         self.agent_memories["synthesizer_agent"] = AgentMemory("synthesizer_agent", memory_dir)
         self.squad_memory = SquadMemory(memory_dir)
+        self.manager = AgentManager()
 
     def review(self, arch_input: ArchitectureInput) -> ReviewResult:
         """Run the full squad review synchronously (wraps async internally)."""
@@ -103,22 +107,37 @@ class ReviewSquad:
         architecture = sanitize_architecture_input(arch_input.description)
         context = arch_input.context or ""
         squad_patterns = self.squad_memory.get_recurring_patterns()
+        orchestration_plan = self.manager.create_plan(arch_input)
+
+        logger.info(
+            "ReviewSquad: manager classified %s / %s complexity",
+            orchestration_plan.architecture_type,
+            orchestration_plan.complexity,
+        )
+        active_agent_names = {
+            plan.agent_name for plan in orchestration_plan.agent_plans if plan.active
+        }
 
         # ── Phase 1: Run all 4 agents in parallel ──────────────────────────────
-        logger.info("ReviewSquad: launching %d agents in parallel", len(self.AGENTS))
+        logger.info("ReviewSquad: launching %d agents in parallel", len(active_agent_names))
 
         tasks = [
             self._run_agent(
                 agent_name=name,
                 system_prompt=system,
-                user_prompt=prompt_fn(
-                    architecture,
-                    context,
-                    self.agent_memories[name].get_lessons_section(),
-                    squad_patterns,
+                user_prompt=self._inject_manager_guidance(
+                    prompt_fn(
+                        architecture,
+                        context,
+                        self.agent_memories[name].get_lessons_section(),
+                        squad_patterns,
+                    ),
+                    orchestration_plan=orchestration_plan,
+                    agent_name=name,
                 ),
             )
             for name, system, prompt_fn in self.AGENTS
+            if name in active_agent_names
         ]
 
         agent_results: list[AgentResult] = await asyncio.gather(*tasks)
@@ -178,7 +197,14 @@ class ReviewSquad:
 
         # ── Phase 5: Update memories ───────────────────────────────────────────
         arch_summary = architecture[:100]
-        self._update_memories(agent_results, synth_lesson, arch_summary, cross_patterns, summary)
+        self._update_memories(
+            agent_results,
+            synth_lesson,
+            arch_summary,
+            cross_patterns,
+            summary,
+            orchestration_plan,
+        )
 
         return ReviewResult(
             input=arch_input,
@@ -186,6 +212,7 @@ class ReviewSquad:
             summary=summary,
             senior_architect_questions=senior_questions,
             recommended_adrs=recommended_adrs,
+            orchestration_plan=orchestration_plan,
             model_used=f"squad:{self.model}",
         )
 
@@ -280,6 +307,18 @@ class ReviewSquad:
             overall_assessment=overall_assessment,
         )
 
+    def _inject_manager_guidance(
+        self,
+        prompt: str,
+        orchestration_plan: OrchestrationPlanSnapshot,
+        agent_name: str,
+    ) -> str:
+        """Append Agent Manager guidance to a specialized agent prompt."""
+        guidance = self.manager.build_agent_guidance(orchestration_plan, agent_name)
+        if not guidance:
+            return prompt
+        return f"{prompt}\n\n{guidance}"
+
     def _update_memories(
         self,
         agent_results: list[AgentResult],
@@ -287,6 +326,7 @@ class ReviewSquad:
         arch_summary: str,
         cross_patterns: list[str],
         summary: ReviewSummary,
+        orchestration_plan: OrchestrationPlanSnapshot,
     ) -> None:
         """Update all agent memories and squad memory after a review."""
         # Update each specialized agent's memory
@@ -297,6 +337,12 @@ class ReviewSquad:
                     mem.append_lesson(result.lesson, review_context=arch_summary)
 
         # Update synthesizer memory
+        manager_lesson = self.manager.build_manager_lesson(orchestration_plan)
+        if manager_lesson:
+            self.agent_memories["manager_agent"].append_lesson(
+                manager_lesson, review_context=arch_summary
+            )
+
         if synth_lesson:
             self.agent_memories["synthesizer_agent"].append_lesson(
                 synth_lesson, review_context=arch_summary
