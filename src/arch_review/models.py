@@ -83,6 +83,34 @@ class ReviewSummary(BaseModel):
     )
 
 
+class AgentFocusPlan(BaseModel):
+    """Manager-defined focus and priority for a single squad agent."""
+
+    agent_name: str
+    priority: str = Field(description="Priority level: critical, high, medium, or low")
+    active: bool = True
+    rationale: str = Field(default="", description="Why this agent was prioritized or skipped")
+    focus_areas: list[str] = Field(
+        default_factory=list,
+        description="Specific focus directives injected into this agent",
+    )
+
+
+class OrchestrationPlanSnapshot(BaseModel):
+    """Serializable snapshot of the Agent Manager orchestration plan."""
+
+    architecture_type: str = Field(description="Manager's classification of the architecture")
+    complexity: str = Field(description="Estimated complexity: low, medium, or high")
+    compliance_flags: list[str] = Field(default_factory=list)
+    cloud_providers: list[str] = Field(default_factory=list)
+    top_risks: list[str] = Field(default_factory=list)
+    manager_briefing: str = Field(
+        default="",
+        description="Short summary of how the squad should approach this review",
+    )
+    agent_plans: list[AgentFocusPlan] = Field(default_factory=list)
+
+
 class ReviewResult(BaseModel):
     """Complete result of an architecture review."""
 
@@ -97,6 +125,7 @@ class ReviewResult(BaseModel):
         default_factory=list,
         description="Architectural decisions that should be documented as ADRs",
     )
+    orchestration_plan: OrchestrationPlanSnapshot | None = None
     model_used: str
     review_version: str = "0.1.0"
     orchestration_plan: "OrchestrationPlanSnapshot | None" = Field(
