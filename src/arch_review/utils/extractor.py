@@ -20,8 +20,8 @@ def _check_tesseract() -> None:
     try:
         import pytesseract
         pytesseract.get_tesseract_version()
-    except Exception:
-        raise EnvironmentError(
+    except Exception as exc:
+        raise OSError(
             "\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "  Tesseract OCR is required for arch-review.\n"
@@ -31,7 +31,7 @@ def _check_tesseract() -> None:
             "  Windows: https://github.com/UB-Mannheim/tesseract/wiki\n\n"
             "  Then restart the app.\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        )
+        ) from exc
 
 # Run check at module load — fail fast and clearly
 _check_tesseract()
@@ -59,8 +59,10 @@ def extract_from_bytes(file_bytes: bytes, filename: str) -> str:
     else:
         try:
             return file_bytes.decode("utf-8", errors="replace").strip()
-        except Exception:
-            raise ValueError(f"Unsupported file type: {ext}. Supported: {', '.join(SUPPORTED_FORMATS)}")
+        except Exception as exc:
+            raise ValueError(
+                f"Unsupported file type: {ext}. Supported: {', '.join(SUPPORTED_FORMATS)}"
+            ) from exc
 
 
 def get_supported_formats() -> list[str]:
@@ -73,8 +75,8 @@ def _extract_pdf(file_bytes: bytes) -> str:
     """Extract text from PDF. Uses text layer if available, OCR for scanned pages."""
     try:
         import fitz
-    except ImportError:
-        raise ImportError("PyMuPDF not installed. Run: pip install pymupdf")
+    except ImportError as exc:
+        raise ImportError("PyMuPDF not installed. Run: pip install pymupdf") from exc
 
     import pytesseract
     from PIL import Image
@@ -135,5 +137,4 @@ def _clean(text: str) -> str:
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE)
     return "\n".join(line.rstrip() for line in text.splitlines()).strip()
-
 

@@ -79,6 +79,7 @@ class AgentMemory:
             return
 
         templates = {
+            "manager_agent": _MANAGER_AGENT_TEMPLATE,
             "security_agent": _SECURITY_AGENT_TEMPLATE,
             "reliability_agent": _RELIABILITY_AGENT_TEMPLATE,
             "cost_agent": _COST_AGENT_TEMPLATE,
@@ -333,6 +334,36 @@ and produce the final coherent review with strategic recommendations.
 
 ## Cross-Agent Patterns
 <!-- Cross-cutting patterns are appended here automatically -->
+"""
+
+_MANAGER_AGENT_TEMPLATE = """\
+# Agent Manager — Memory & Evolution
+
+## Role
+You orchestrate the review squad before the specialists run.
+Your job is to classify the architecture, infer hidden context, and tailor
+the focus of each specialist agent.
+
+## Core Responsibilities
+- Classify architecture type and complexity
+- Surface compliance and cloud context early
+- Prioritize specialist focus based on risk signals
+- Keep orchestration explainable to the user
+- Learn which orchestration strategies work best
+
+## Review Principles
+1. Sharpen specialists — do not replace them
+2. Prioritize context that materially changes risk
+3. Keep the plan explainable and lightweight
+4. Optimize for high-signal findings without adding avoidable latency
+
+---
+
+## Lessons Learned
+<!-- Lessons are appended here automatically after each review -->
+
+## Patterns Discovered
+<!-- Recurring patterns are appended here automatically -->
 """
 
 _DEFAULT_AGENT_TEMPLATE = """\

@@ -258,6 +258,7 @@ Anything that describes your architecture:
 arch-review review        Run a single-agent review
 arch-review squad review  Run the 4-agent squad review
 arch-review squad memory  View/inspect agent memory files
+arch-review history       View local CLI execution history
 arch-review adr generate  Generate ADRs from review findings
 arch-review models        List all supported LLM models
 arch-review example       Print an example architecture
