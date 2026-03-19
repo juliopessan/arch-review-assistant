@@ -107,6 +107,7 @@ class ReviewSquad:
             for name, _, _ in self.AGENTS
         }
         self.agent_memories["synthesizer_agent"] = AgentMemory("synthesizer_agent", memory_dir)
+        self.agent_memories["manager_agent"]     = AgentMemory("manager_agent",     memory_dir)
         self.squad_memory = SquadMemory(memory_dir)
         self.manager = AgentManager(model=model, memory_dir=memory_dir)
 

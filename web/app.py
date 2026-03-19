@@ -6,6 +6,16 @@ import html, io, os, re, sys, threading, zipfile, random
 from pathlib import Path
 from queue import Empty, Queue
 
+# ── sys.path must be set BEFORE any arch_review import ────────────────────────
+# Using absolute resolved paths prevents duplicate module loading
+# (which causes Pydantic "different class identity" validation errors)
+_SRC = str(Path(__file__).parent.parent.joinpath("src").resolve())
+_WEB = str(Path(__file__).parent.resolve())
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+if _WEB not in sys.path:
+    sys.path.insert(0, _WEB)
+
 import streamlit as st
 
 st.set_page_config(
@@ -14,9 +24,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent))
 
 from arch_review.adr_generator import ADRGenerator
 from arch_review.engine import SUPPORTED_MODELS, ReviewEngine
@@ -405,6 +412,8 @@ with tab_squad:
         def _run(q):
             """Run ReviewSquad in a dedicated thread with its own event loop."""
             import asyncio as _aio
+            # Import from the already-loaded module to guarantee same class identity
+            # (prevents Pydantic "different OrchestrationPlanSnapshot" validation error)
             from arch_review.squad.squad import ReviewSquad
 
             class EventSquad(ReviewSquad):
@@ -420,8 +429,7 @@ with tab_squad:
                     })
                     return result
 
-            # Always create a fresh event loop in this thread
-            # (avoids "no running event loop" or "loop already running" errors)
+            # Create fresh event loop for this thread (avoids asyncio conflicts)
             loop = _aio.new_event_loop()
             _aio.set_event_loop(loop)
             try:
