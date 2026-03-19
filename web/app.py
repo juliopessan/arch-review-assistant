@@ -397,79 +397,55 @@ with tab_squad:
 
     if st.session_state.get("squad_running"):
         arch_inp = ArchitectureInput(
-            description=st.session_state.get("squad_arch",""),
+            description=st.session_state.get("squad_arch", ""),
             context=st.session_state.get("squad_ctx") or None,
         )
         q: Queue = Queue()
 
         def _run(q):
-            import asyncio, json as _j
-            from arch_review.squad.squad import ReviewSquad as _SQ, AgentResult as _AR
-            from arch_review.squad.prompts import build_synthesizer_prompt as _bsp, SYNTHESIZER_SYSTEM as _SS
-            from arch_review.utils.json_parser import sanitize_architecture_input as _san
-            import litellm as _ll
+            """Run ReviewSquad in a thread and stream events back via Queue."""
+            import time
+            from arch_review.squad.squad import ReviewSquad
 
-            async def _a():
-                sq = _SQ(model=selected_model)
-                arch = _san(arch_inp.description); ctx = arch_inp.context or ""
-                sp = sq.squad_memory.get_recurring_patterns()
-                tasks = []
-                for nm, sys_p, pfn in sq.AGENTS:
-                    q.put({"event":"start","agent":nm})
-                    tasks.append((nm, sys_p, pfn(arch, ctx, sq.agent_memories[nm].get_lessons_section(), sp)))
+            # Stream phase events so the UI can update agent cards
+            class EventSquad(ReviewSquad):
+                """Wraps ReviewSquad to emit start/done events per agent."""
 
-                async def _call(nm, sys_p, prompt):
-                    try:
-                        r = await asyncio.to_thread(_ll.completion, model=sq.model,
-                            messages=[{"role":"system","content":sys_p},{"role":"user","content":prompt}],
-                            temperature=sq.temperature, max_tokens=sq.max_tokens)
-                        d = sq._parse_json(r.choices[0].message.content or "", nm)
-                        q.put({"event":"done","agent":nm,"count":len(d.get("findings",[])),"data":d})
-                        return nm, d
-                    except Exception as ex:
-                        q.put({"event":"error","agent":nm,"error":str(ex)})
-                        return nm, {"findings":[],"agent_insight":"","lesson_for_memory":""}
+                async def _run_agent(self, agent_name, system_prompt, user_prompt):
+                    q.put({"event": "start", "agent": agent_name})
+                    result = await super()._run_agent(agent_name, system_prompt, user_prompt)
+                    q.put({
+                        "event": "done" if not result.error else "error",
+                        "agent": agent_name,
+                        "count": len(result.findings),
+                        "error": result.error or "",
+                    })
+                    return result
 
-                res = await asyncio.gather(*[_call(n,s,p) for n,s,p in tasks])
-                af, ins, ars = [], [], []
-                for nm, d in res:
-                    ar = _AR(agent_name=nm); ar.findings=d.get("findings",[]); ar.insight=d.get("agent_insight",""); ar.lesson=d.get("lesson_for_memory","")
-                    ars.append(ar); af.extend(ar.findings)
-                    if ar.insight: ins.append(f"[{nm}] {ar.insight}")
+            try:
+                sq = EventSquad(model=selected_model)
+                # Emit manager start
+                q.put({"event": "start", "agent": "manager_agent"})
+                review = sq.review(arch_inp)
+                q.put({"event": "done", "agent": "manager_agent", "count": 0})
+                q.put({"event": "result", "result": review})
+            except Exception as exc:
+                q.put({"event": "error", "agent": "squad", "error": str(exc)})
 
-                q.put({"event":"start","agent":"synthesizer_agent"})
-                sm = sq.agent_memories["synthesizer_agent"]
-                sp2 = _bsp(arch, ctx, _j.dumps(af,indent=2), ins, sm.get_lessons_section(), sp)
-                try:
-                    sr = await asyncio.to_thread(_ll.completion, model=sq.model,
-                        messages=[{"role":"system","content":_SS},{"role":"user","content":sp2}],
-                        temperature=sq.temperature, max_tokens=sq.max_tokens)
-                    sd = sq._parse_json(sr.choices[0].message.content or "", "synthesizer_agent")
-                    q.put({"event":"done","agent":"synthesizer_agent","count":len(sd.get("findings",[])),"data":sd})
-                except Exception as ex:
-                    q.put({"event":"error","agent":"synthesizer_agent","error":str(ex)}); sd={"findings":af}
-
-                from arch_review.models import ReviewResult as _RR
-                ff = sq._build_findings(sd.get("findings", af))
-                sm2 = sq._build_summary(ff, sd.get("overall_assessment",""))
-                rv = _RR(input=arch_inp, findings=ff, summary=sm2,
-                    senior_architect_questions=sd.get("senior_architect_questions",[]),
-                    recommended_adrs=sd.get("recommended_adrs",[]), model_used=f"squad:{sq.model}")
-                sq._update_memories(ars, sd.get("lesson_for_memory",""), arch[:100], sd.get("cross_patterns",[]), sm2)
-                q.put({"event":"result","result":rv})
-
-            asyncio.run(_a())
-            q.put({"event":"finished"})
+            q.put({"event": "finished"})
 
         t_thread = threading.Thread(target=_run, args=(q,), daemon=True)
         t_thread.start()
-        squad_spinner = rand_msg(msgs["squad"])
-        with st.spinner(squad_spinner):
+        with st.spinner(rand_msg(msgs["squad"])):
             while True:
-                try: ev = q.get(timeout=180)
-                except Empty: st.error("Squad timed out."); break
-                if ev["event"] in ("start","done","error"):
-                    log.append(ev); st.session_state["squad_log"] = log
+                try:
+                    ev = q.get(timeout=180)
+                except Empty:
+                    st.error("Squad timed out after 3 minutes."); break
+
+                if ev["event"] in ("start", "done", "error"):
+                    log.append(ev)
+                    st.session_state["squad_log"] = log
                 elif ev["event"] == "result":
                     st.session_state["review_result"] = ev["result"]
                 elif ev["event"] == "finished":
@@ -478,8 +454,12 @@ with tab_squad:
         st.session_state["squad_running"] = False
         if gen_adrs and "review_result" in st.session_state:
             with st.spinner(rand_msg(msgs["adr"])):
-                try: st.session_state["adr_result"] = ADRGenerator(model=selected_model).from_review(st.session_state["review_result"])
-                except Exception: pass
+                try:
+                    st.session_state["adr_result"] = ADRGenerator(model=selected_model).from_review(
+                        st.session_state["review_result"]
+                    )
+                except Exception:
+                    pass
         st.rerun()
 
     if "review_result" in st.session_state:
