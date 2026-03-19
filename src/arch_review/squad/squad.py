@@ -1,4 +1,4 @@
-"""ReviewSquad — 4 specialized agents running in parallel + synthesizer with memory."""
+"""ReviewSquad — Agent Manager + 4 specialized agents + synthesizer."""
 
 from __future__ import annotations
 
@@ -12,13 +12,17 @@ from typing import Any
 import litellm
 
 from arch_review.models import (
+    AgentRunMetric,
     ArchitectureInput,
     Finding,
     FindingCategory,
+    OrchestrationPlanSnapshot,
     ReviewResult,
     ReviewSummary,
+    RunMetrics,
     Severity,
 )
+from arch_review.squad.manager import AgentManager, OrchestrationPlan
 from arch_review.squad.memory import AgentMemory, SquadMemory
 from arch_review.squad.prompts import (
     COST_SYSTEM,
@@ -47,24 +51,36 @@ class AgentResult:
     insight: str = ""
     lesson: str = ""
     error: str | None = None
+    # Runtime telemetry
+    duration_s: float = 0.0
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 class ReviewSquad:
     """
-    Orchestrates 4 specialized agents running in parallel,
-    followed by a synthesizer that produces the final review.
+    Orchestrates the full review pipeline:
 
-    Each agent:
-    - Has its own AGENT.md memory file that persists across reviews
-    - Loads its past lessons before each review
-    - Appends new lessons after each review
-    - Contributes to the shared SQUAD_MEMORY.md
+    Phase 0: Agent Manager — analyzes architecture, produces OrchestrationPlan
+             (decides which agents run, at what priority, with what focus)
+
+    Phase 1: Specialist Agents — run in parallel, guided by the plan
+             (only enabled agents run; each receives manager's focus_note)
+
+    Phase 2: Synthesizer — consolidates findings into final ReviewResult
+
+    Phase 3: Memory — lessons + patterns saved for future reviews
 
     Architecture:
-        [SecurityAgent] ─┐
-        [ReliabilityAgent]─┤ parallel ──→ [SynthesizerAgent] → ReviewResult
-        [CostAgent] ──────┤
-        [ObservabilityAgent]─┘
+        [AgentManager] ──→ OrchestrationPlan
+                                  │
+              ┌───────────────────┼───────────────────┐
+        [SecurityAgent]  [ReliabilityAgent]  [CostAgent]  [ObservabilityAgent]
+              └───────────────────┼───────────────────┘
+                                  │
+                         [SynthesizerAgent]
+                                  │
+                           ReviewResult
     """
 
     AGENTS = [
@@ -86,44 +102,70 @@ class ReviewSquad:
         self.max_tokens = max_tokens
         self.memory_dir = memory_dir
 
-        # Initialize memory for each agent + squad
         self.agent_memories = {
             name: AgentMemory(name, memory_dir)
             for name, _, _ in self.AGENTS
         }
         self.agent_memories["synthesizer_agent"] = AgentMemory("synthesizer_agent", memory_dir)
         self.squad_memory = SquadMemory(memory_dir)
+        self.manager = AgentManager(model=model, memory_dir=memory_dir)
 
     def review(self, arch_input: ArchitectureInput) -> ReviewResult:
-        """Run the full squad review synchronously (wraps async internally)."""
+        """Run the full managed squad review synchronously."""
         return asyncio.run(self._review_async(arch_input))
 
     async def _review_async(self, arch_input: ArchitectureInput) -> ReviewResult:
-        # Sanitize input — removes Mermaid comments, smart quotes, control chars
+        import time
+        from datetime import datetime, timezone
+
         architecture = sanitize_architecture_input(arch_input.description)
         context = arch_input.context or ""
         squad_patterns = self.squad_memory.get_recurring_patterns()
 
-        # ── Phase 1: Run all 4 agents in parallel ──────────────────────────────
-        logger.info("ReviewSquad: launching %d agents in parallel", len(self.AGENTS))
+        review_started = time.monotonic()
+        started_at_iso = datetime.now(timezone.utc).isoformat()
+
+        # ── Phase 0: Agent Manager ─────────────────────────────────────────────
+        logger.info("ReviewSquad: Agent Manager analyzing architecture...")
+        t_mgr_start = time.monotonic()
+        plan: OrchestrationPlan = await asyncio.to_thread(
+            self.manager.analyze,
+            architecture,
+            context,
+            squad_patterns,
+        )
+        t_mgr_end = time.monotonic()
+        phase_manager_s = t_mgr_end - t_mgr_start
+        logger.info(
+            "Plan: type=%s complexity=%s active=%s skipped=%s compliance=%s",
+            plan.architecture_type, plan.complexity,
+            plan.active_agents, plan.skipped_agents, plan.compliance_flags,
+        )
+
+        # ── Phase 1: Run enabled agents in parallel ────────────────────────────
+        active_agents = [
+            (name, system, prompt_fn)
+            for name, system, prompt_fn in self.AGENTS
+            if plan.get_directive(name).enabled
+        ]
+        logger.info("ReviewSquad: launching %d/%d agents", len(active_agents), len(self.AGENTS))
 
         tasks = [
             self._run_agent(
                 agent_name=name,
                 system_prompt=system,
-                user_prompt=prompt_fn(
-                    architecture,
-                    context,
-                    self.agent_memories[name].get_lessons_section(),
-                    squad_patterns,
+                user_prompt=self._build_agent_prompt(
+                    name, prompt_fn, architecture, context, plan
                 ),
             )
-            for name, system, prompt_fn in self.AGENTS
+            for name, system, prompt_fn in active_agents
         ]
 
+        t_parallel_start = time.monotonic()
         agent_results: list[AgentResult] = await asyncio.gather(*tasks)
+        phase_parallel_s = time.monotonic() - t_parallel_start
 
-        # ── Phase 2: Collect all findings for synthesizer ──────────────────────
+        # ── Phase 2: Collect findings for synthesizer ──────────────────────────
         all_raw_findings: list[dict[str, Any]] = []
         agent_insights: list[str] = []
 
@@ -135,29 +177,36 @@ class ReviewSquad:
             if result.insight:
                 agent_insights.append(f"[{result.agent_name}] {result.insight}")
 
+        if plan.manager_briefing:
+            agent_insights.insert(0, f"[manager] {plan.manager_briefing}")
+
         # ── Phase 3: Synthesizer ───────────────────────────────────────────────
-        logger.info("ReviewSquad: running synthesizer on %d findings", len(all_raw_findings))
+        logger.info("ReviewSquad: synthesizer consolidating %d findings", len(all_raw_findings))
 
         synth_memory = self.agent_memories["synthesizer_agent"]
+        plan_context = self._format_plan_context(plan)
         synth_prompt = build_synthesizer_prompt(
             architecture=architecture,
-            context=context,
+            context=context + ("\n\n" + plan_context if plan_context else ""),
             all_findings_json=json.dumps(all_raw_findings, indent=2),
             agent_insights=agent_insights,
             lessons=synth_memory.get_lessons_section(),
             squad_patterns=squad_patterns,
         )
 
+        t_synth_start = time.monotonic()
         synth_result = await self._run_agent(
             agent_name="synthesizer_agent",
             system_prompt=SYNTHESIZER_SYSTEM,
             user_prompt=synth_prompt,
         )
+        phase_synth_s = time.monotonic() - t_synth_start
+
+        total_duration_s = time.monotonic() - review_started
 
         # ── Phase 4: Build ReviewResult ────────────────────────────────────────
         if synth_result.error or not synth_result.findings:
-            # Fallback: use raw findings if synthesizer fails
-            logger.warning("Synthesizer failed, using raw findings as fallback")
+            logger.warning("Synthesizer failed — using raw findings as fallback")
             final_findings_raw = all_raw_findings
             overall_assessment = "Review completed with partial synthesis."
             senior_questions: list[str] = []
@@ -179,6 +228,66 @@ class ReviewSquad:
         # ── Phase 5: Update memories ───────────────────────────────────────────
         arch_summary = architecture[:100]
         self._update_memories(agent_results, synth_lesson, arch_summary, cross_patterns, summary)
+        self.manager.record_lesson(plan.manager_lesson, arch_summary)
+
+        # ── Build RunMetrics ───────────────────────────────────────────────────
+        agent_metrics: list[AgentRunMetric] = []
+
+        # Manager (no token data available since we use asyncio.to_thread directly)
+        agent_metrics.append(AgentRunMetric(
+            agent_name="manager_agent",
+            phase="manager",
+            duration_s=round(phase_manager_s, 2),
+            tokens_in=0, tokens_out=0,
+            findings_count=0,
+        ))
+
+        # Specialist agents (parallel phase)
+        for ar in agent_results:
+            agent_metrics.append(AgentRunMetric(
+                agent_name=ar.agent_name,
+                phase="parallel",
+                duration_s=round(ar.duration_s, 2),
+                tokens_in=ar.tokens_in,
+                tokens_out=ar.tokens_out,
+                findings_count=len(ar.findings),
+                error=ar.error,
+            ))
+
+        # Synthesizer
+        agent_metrics.append(AgentRunMetric(
+            agent_name="synthesizer_agent",
+            phase="synthesizer",
+            duration_s=round(synth_result.duration_s, 2),
+            tokens_in=synth_result.tokens_in,
+            tokens_out=synth_result.tokens_out,
+            findings_count=len(synth_result.findings),
+            error=synth_result.error,
+        ))
+
+        run_metrics = RunMetrics(
+            model_used=self.model,
+            started_at=started_at_iso,
+            total_duration_s=round(total_duration_s, 2),
+            phase_manager_s=round(phase_manager_s, 2),
+            phase_parallel_s=round(phase_parallel_s, 2),
+            phase_synth_s=round(phase_synth_s, 2),
+            agents=agent_metrics,
+        )
+
+        # Build serializable plan snapshot
+        plan_snapshot = OrchestrationPlanSnapshot(
+            architecture_type=plan.architecture_type,
+            complexity=plan.complexity,
+            top_risks=plan.top_risks,
+            compliance_flags=plan.compliance_flags,
+            cloud_providers=plan.cloud_providers,
+            manager_briefing=plan.manager_briefing,
+            active_agents=plan.active_agents,
+            skipped_agents=plan.skipped_agents,
+            agent_priorities={d.agent_name: d.priority for d in plan.agent_directives},
+            agent_focus_notes={d.agent_name: d.focus_note for d in plan.agent_directives if d.focus_note},
+        )
 
         return ReviewResult(
             input=arch_input,
@@ -187,7 +296,59 @@ class ReviewSquad:
             senior_architect_questions=senior_questions,
             recommended_adrs=recommended_adrs,
             model_used=f"squad:{self.model}",
+            orchestration_plan=plan_snapshot,
+            run_metrics=run_metrics,
         )
+
+    def _build_agent_prompt(
+        self,
+        agent_name: str,
+        prompt_fn: Any,
+        architecture: str,
+        context: str,
+        plan: OrchestrationPlan,
+    ) -> str:
+        """Build agent prompt enriched with manager's focus_note."""
+        directive = plan.get_directive(agent_name)
+
+        # Inject manager's focus note into context
+        enriched_context = context
+        if directive.focus_note:
+            enriched_context = (
+                f"{context}\n\n"
+                f"[MANAGER BRIEFING FOR {agent_name.upper()}]\n"
+                f"Priority: {directive.priority.upper()}\n"
+                f"Focus on: {directive.focus_note}"
+            ).strip()
+
+        # Add compliance flags to security agent
+        if agent_name == "security_agent" and plan.compliance_flags:
+            flags = ", ".join(plan.compliance_flags)
+            enriched_context += f"\n\nCompliance regimes detected: {flags}. Pay extra attention."
+
+        return prompt_fn(
+            architecture,
+            enriched_context,
+            self.agent_memories[agent_name].get_lessons_section(),
+            self.squad_memory.get_recurring_patterns(),
+        )
+
+    def _format_plan_context(self, plan: OrchestrationPlan) -> str:
+        """Format plan metadata as context for the synthesizer."""
+        lines = [
+            f"[AGENT MANAGER ANALYSIS]",
+            f"Architecture type: {plan.architecture_type}",
+            f"Complexity: {plan.complexity}",
+        ]
+        if plan.top_risks:
+            lines.append(f"Top risks identified: {'; '.join(plan.top_risks)}")
+        if plan.compliance_flags:
+            lines.append(f"Compliance: {', '.join(plan.compliance_flags)}")
+        if plan.cloud_providers:
+            lines.append(f"Cloud: {', '.join(plan.cloud_providers)}")
+        if plan.skipped_agents:
+            lines.append(f"Skipped agents: {', '.join(plan.skipped_agents)} (irrelevant for this architecture)")
+        return "\n".join(lines)
 
     async def _run_agent(
         self,
@@ -195,55 +356,52 @@ class ReviewSquad:
         system_prompt: str,
         user_prompt: str,
     ) -> AgentResult:
-        """Run a single agent asynchronously."""
         result = AgentResult(agent_name=agent_name)
+        t0 = asyncio.get_event_loop().time()
         try:
             response = await asyncio.to_thread(
                 litellm.completion,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
+                    {"role": "user",   "content": user_prompt},
                 ],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
+            result.duration_s = asyncio.get_event_loop().time() - t0
+            # Capture token usage from response
+            usage = getattr(response, "usage", None)
+            if usage:
+                result.tokens_in  = getattr(usage, "prompt_tokens", 0) or 0
+                result.tokens_out = getattr(usage, "completion_tokens", 0) or 0
             raw = response.choices[0].message.content or ""
             data = self._parse_json(raw, agent_name)
-
             result.findings = data.get("findings", [])
-            result.insight = data.get("agent_insight", "")
-            result.lesson = data.get("lesson_for_memory", "")
-
-            # Stash full data on synthesizer for cross_patterns etc.
+            result.insight  = data.get("agent_insight", "")
+            result.lesson   = data.get("lesson_for_memory", "")
             result._raw_data = data  # type: ignore[attr-defined]
-
         except Exception as exc:
+            result.duration_s = asyncio.get_event_loop().time() - t0
             logger.error("Agent %s error: %s", agent_name, exc)
             result.error = str(exc)
-
         return result
 
     def _parse_json(self, content: str, agent_name: str) -> dict[str, Any]:
-        """Parse JSON using robust multi-strategy parser."""
         try:
             return parse_llm_json(content, context=agent_name)
         except ValueError:
             return {"findings": [], "agent_insight": "", "lesson_for_memory": ""}
 
     def _build_findings(self, raw_findings: list[dict[str, Any]]) -> list[Finding]:
-        """Convert raw dicts to typed Finding objects, sorted by severity."""
         findings = []
-        seen_titles: set[str] = set()
-
+        seen: set[str] = set()
         for raw in raw_findings:
             title = raw.get("title", "Untitled")
-            # Simple deduplication by normalized title
-            normalized = title.lower().strip()
-            if normalized in seen_titles:
+            norm  = title.lower().strip()
+            if norm in seen:
                 continue
-            seen_titles.add(normalized)
-
+            seen.add(norm)
             try:
                 findings.append(Finding(
                     title=title,
@@ -258,11 +416,8 @@ class ReviewSquad:
             except Exception as exc:
                 logger.warning("Skipping malformed finding '%s': %s", title, exc)
 
-        severity_order = {
-            Severity.CRITICAL: 0, Severity.HIGH: 1,
-            Severity.MEDIUM: 2, Severity.LOW: 3, Severity.INFO: 4,
-        }
-        return sorted(findings, key=lambda f: severity_order[f.severity])
+        order = {Severity.CRITICAL:0,Severity.HIGH:1,Severity.MEDIUM:2,Severity.LOW:3,Severity.INFO:4}
+        return sorted(findings, key=lambda f: order[f.severity])
 
     def _build_summary(self, findings: list[Finding], overall_assessment: str) -> ReviewSummary:
         counts = {s: 0 for s in Severity}
@@ -288,37 +443,25 @@ class ReviewSquad:
         cross_patterns: list[str],
         summary: ReviewSummary,
     ) -> None:
-        """Update all agent memories and squad memory after a review."""
-        # Update each specialized agent's memory
         for result in agent_results:
             if result.lesson and not result.error:
                 mem = self.agent_memories.get(result.agent_name)
                 if mem:
                     mem.append_lesson(result.lesson, review_context=arch_summary)
-
-        # Update synthesizer memory
         if synth_lesson:
-            self.agent_memories["synthesizer_agent"].append_lesson(
-                synth_lesson, review_context=arch_summary
-            )
-
-        # Update squad memory with cross-patterns
+            self.agent_memories["synthesizer_agent"].append_lesson(synth_lesson, review_context=arch_summary)
         if cross_patterns:
             agents_involved = [r.agent_name for r in agent_results if not r.error]
             for pattern in cross_patterns:
                 self.squad_memory.append_cross_pattern(pattern, agents_involved)
-
-        # Record review in squad history
-        top_patterns = cross_patterns[:3] if cross_patterns else []
         self.squad_memory.append_review_summary(
             architecture_summary=arch_summary,
             total_findings=summary.total_findings,
             critical_count=summary.critical_count,
-            top_patterns=top_patterns,
+            top_patterns=cross_patterns[:3],
+        )
+        logger.info(
+            "Memories updated — %d lessons, %d cross-patterns",
+            sum(1 for r in agent_results if r.lesson), len(cross_patterns),
         )
 
-        logger.info(
-            "ReviewSquad: memories updated — %d agent lessons, %d cross-patterns",
-            sum(1 for r in agent_results if r.lesson),
-            len(cross_patterns),
-        )

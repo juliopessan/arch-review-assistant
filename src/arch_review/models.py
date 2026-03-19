@@ -99,3 +99,89 @@ class ReviewResult(BaseModel):
     )
     model_used: str
     review_version: str = "0.1.0"
+    orchestration_plan: "OrchestrationPlanSnapshot | None" = Field(
+        default=None,
+        description="Agent Manager plan — what was decided before agents ran",
+    )
+    run_metrics: "RunMetrics | None" = Field(
+        default=None,
+        description="Runtime telemetry — duration, tokens, cost per phase and agent",
+    )
+
+
+class OrchestrationPlanSnapshot(BaseModel):
+    """Serializable snapshot of the Agent Manager orchestration plan."""
+    architecture_type: str = "unknown"
+    complexity: str = "medium"
+    top_risks: list[str] = Field(default_factory=list)
+    compliance_flags: list[str] = Field(default_factory=list)
+    cloud_providers: list[str] = Field(default_factory=list)
+    manager_briefing: str = ""
+    active_agents: list[str] = Field(default_factory=list)
+    skipped_agents: list[str] = Field(default_factory=list)
+    agent_priorities: dict[str, str] = Field(default_factory=dict)
+    agent_focus_notes: dict[str, str] = Field(default_factory=dict)
+
+
+class AgentRunMetric(BaseModel):
+    """Per-agent runtime telemetry for one review."""
+    agent_name: str
+    phase: str                        # "manager" | "parallel" | "synthesizer"
+    duration_s: float = 0.0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    findings_count: int = 0
+    error: str | None = None
+
+    @property
+    def tokens_total(self) -> int:
+        return self.tokens_in + self.tokens_out
+
+    @property
+    def cost_usd(self) -> float:
+        """Rough cost estimate using Claude Sonnet 4 pricing as default.
+        Input:  $3.00 / 1M tokens
+        Output: $15.00 / 1M tokens
+        """
+        return (self.tokens_in * 3.0 + self.tokens_out * 15.0) / 1_000_000
+
+
+class RunMetrics(BaseModel):
+    """Complete runtime metrics for one squad review."""
+    model_used: str = ""
+    started_at: str = ""              # ISO timestamp
+    total_duration_s: float = 0.0
+    phase_manager_s: float = 0.0
+    phase_parallel_s: float = 0.0    # wall-clock time (agents ran in parallel)
+    phase_synth_s: float = 0.0
+    agents: list[AgentRunMetric] = Field(default_factory=list)
+
+    @property
+    def tokens_total(self) -> int:
+        return sum(a.tokens_total for a in self.agents)
+
+    @property
+    def tokens_in_total(self) -> int:
+        return sum(a.tokens_in for a in self.agents)
+
+    @property
+    def tokens_out_total(self) -> int:
+        return sum(a.tokens_out for a in self.agents)
+
+    @property
+    def cost_usd(self) -> float:
+        return sum(a.cost_usd for a in self.agents)
+
+    @property
+    def findings_total(self) -> int:
+        return sum(a.findings_count for a in self.agents if a.phase != "synthesizer")
+
+    def roi_label(self, lang: str = "en") -> str:
+        """Human-readable ROI estimate vs a manual senior architect review.
+        Assume: senior architect = $150/h, manual review = 4h = $600.
+        """
+        saved = max(0.0, 600.0 - self.cost_usd)
+        ratio = saved / max(self.cost_usd, 0.001)
+        if lang == "pt":
+            return f"≈ ${saved:,.0f} economizados vs revisão manual ({ratio:.0f}x ROI)"
+        return f"≈ ${saved:,.0f} saved vs manual review ({ratio:.0f}x ROI)"

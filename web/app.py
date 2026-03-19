@@ -367,50 +367,33 @@ with tab_review:
 # ║  TAB: SQUAD OFFICE                                                          ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 with tab_squad:
-    st.markdown(t("squad.title"))
-    st.caption(t("squad.caption"))
-
-    AGENTS = {
-        "security_agent":      {"ic":"🔐","nm":t("agent.security.nm"),     "ds":t("agent.security.ds")},
-        "reliability_agent":   {"ic":"🛡️","nm":t("agent.reliability.nm"),   "ds":t("agent.reliability.ds")},
-        "cost_agent":          {"ic":"💰","nm":t("agent.cost.nm"),           "ds":t("agent.cost.ds")},
-        "observability_agent": {"ic":"📡","nm":t("agent.observability.nm"),  "ds":t("agent.observability.ds")},
-        "synthesizer_agent":   {"ic":"🧠","nm":t("agent.synthesizer.nm"),    "ds":t("agent.synthesizer.ds")},
-    }
+    import streamlit.components.v1 as components
+    from squad_office import build_squad_office_html, build_agent_states, build_plan_dict
 
     log: list[dict] = st.session_state.get("squad_log", [])
+    review_result   = st.session_state.get("review_result")
+    plan_snap       = review_result.orchestration_plan if review_result else None
+    plan_dict       = build_plan_dict(plan_snap)
+    agent_states    = build_agent_states(log)
 
-    def _state(name: str):
-        evts = [v for v in log if v.get("agent") == name]
-        if any(v["event"]=="error" for v in evts): return "error", t("squad.error"), 0
-        if any(v["event"]=="done"  for v in evts):
-            c = next((v.get("count",0) for v in evts if v["event"]=="done"), 0)
-            return "done", t("squad.done"), c
-        if any(v["event"]=="start" for v in evts): return "running", t("squad.running"), 0
-        return "idle", t("squad.idle"), 0
+    # Manager state
+    if plan_snap:
+        agent_states["manager_agent"] = {"status": "done", "count": 0}
+    elif st.session_state.get("squad_running"):
+        agent_states["manager_agent"] = {"status": "running", "count": 0}
 
-    spec = list(AGENTS.keys())[:4]
-    synth = list(AGENTS.keys())[4]
-    cols9 = st.columns(9)
-    ac = [cols9[0], cols9[2], cols9[4], cols9[6]]
+    office_html = build_squad_office_html(agent_states, lang=lang, plan=plan_dict)
+    components.html(office_html, height=620, scrolling=False)
 
-    for i, name in enumerate(spec):
-        a = AGENTS[name]; css, st_, cnt = _state(name)
-        cnt_html = f'<div class="ct">{cnt} {t("squad.findings")}</div>' if cnt else ""
-        with ac[i]:
-            st.markdown(f'<div class="agentcard {css}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="ds">{a["ds"]}</div><div class="st">{st_}</div>{cnt_html}</div>', unsafe_allow_html=True)
-        if i < 3:
-            with cols9[i*2+1]:
-                st.markdown('<div class="arrow" style="padding-top:22px">→</div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    _, sc, _ = st.columns([2,1,2])
-    with sc:
-        a = AGENTS[synth]; css, st_, cnt = _state(synth)
-        cnt_html = f'<div class="ct">{cnt} {t("squad.final")}</div>' if cnt else ""
-        st.markdown(f'<div class="agentcard {css}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="ds">{a["ds"]}</div><div class="st">{st_}</div>{cnt_html}</div>', unsafe_allow_html=True)
-
-    st.divider()
+    # Result summary below canvas
+    if review_result and "squad:" in review_result.model_used:
+        s = review_result.summary
+        st.success(f"{t('squad.complete')} **{s.total_findings} {t('squad.total_findings')}** · {s.critical_count} {t('squad.critical')} · {s.high_count} {t('squad.high')}")
+        if s.top_risk:
+            st.warning(f"{t('squad.top_risk')} **{esc(s.top_risk)}**")
+        st.info(t("review.squad.trigger"))
+    elif not st.session_state.get("squad_running"):
+        st.caption(t("squad.no_result"))
 
     if st.session_state.get("squad_running"):
         arch_inp = ArchitectureInput(
@@ -531,6 +514,40 @@ with tab_findings:
         """, unsafe_allow_html=True)
         st.caption(f"{t('findings.model')} `{r.model_used}`")
 
+        # ── Agent Manager Plan (shown only for squad reviews) ──────────────────
+        if r.orchestration_plan and "squad:" in r.model_used:
+            plan = r.orchestration_plan
+            with st.expander("🎯 Agent Manager Plan", expanded=False):
+                pc1, pc2, pc3 = st.columns(3)
+                pc1.metric("Architecture", plan.architecture_type)
+                pc2.metric("Complexity", plan.complexity.upper())
+                pc3.metric("Agents Active", f"{len(plan.active_agents)}/4")
+
+                if plan.top_risks:
+                    st.markdown("**Top risks detected before agents ran:**")
+                    for i, risk in enumerate(plan.top_risks, 1):
+                        st.markdown(f"**{i}.** {risk}")
+
+                if plan.compliance_flags or plan.cloud_providers:
+                    fc1, fc2 = st.columns(2)
+                    if plan.compliance_flags:
+                        fc1.markdown(f"**Compliance:** {', '.join(plan.compliance_flags)}")
+                    if plan.cloud_providers:
+                        fc2.markdown(f"**Cloud:** {', '.join(plan.cloud_providers)}")
+
+                if plan.agent_focus_notes:
+                    st.markdown("**Agent focus directives:**")
+                    focus_map = {"security_agent":"🔐","reliability_agent":"🛡️","cost_agent":"💰","observability_agent":"📡"}
+                    for agent, note in plan.agent_focus_notes.items():
+                        ic = focus_map.get(agent, "🤖")
+                        prio = plan.agent_priorities.get(agent, "normal").upper()
+                        prio_colors = {"CRITICAL":"#dc2626","HIGH":"#ea580c","NORMAL":"#6b7280","LOW":"#9ca3af"}
+                        color = prio_colors.get(prio, "#6b7280")
+                        st.markdown(f'{ic} **{agent.replace("_"," ").title()}** <span style="color:{color};font-size:.75rem;font-weight:700">[{prio}]</span> — {note}', unsafe_allow_html=True)
+
+                if plan.skipped_agents:
+                    st.caption(f"⏭ Skipped (irrelevant): {', '.join(plan.skipped_agents)}")
+
         if s.overall_assessment:
             with st.expander(t("findings.assessment"), expanded=True):
                 st.write(s.overall_assessment)
@@ -642,20 +659,22 @@ with tab_memory:
     from arch_review.squad.memory import DEFAULT_MEMORY_DIR, AgentMemory, SquadMemory
     mem   = DEFAULT_MEMORY_DIR
     alist = ["security_agent","reliability_agent","cost_agent","observability_agent","synthesizer_agent"]
+    alist_full = alist + ["manager_agent"]
     AGENT_META_MEM = {
         "security_agent":      {"ic":"🔐","nm":t("agent.security.nm")},
         "reliability_agent":   {"ic":"🛡️","nm":t("agent.reliability.nm")},
         "cost_agent":          {"ic":"💰","nm":t("agent.cost.nm")},
         "observability_agent": {"ic":"📡","nm":t("agent.observability.nm")},
         "synthesizer_agent":   {"ic":"🧠","nm":t("agent.synthesizer.nm")},
+        "manager_agent":       {"ic":"🎯","nm":"Agent Manager"},
     }
 
     st.markdown(t("memory.title"))
     st.caption(t("memory.caption"))
 
-    # ── Agent status cards ─────────────────────────────────────────────────────
-    mcols = st.columns(5)
-    for i, nm in enumerate(alist):
+    # ── Agent status cards (6 agents including Manager) ───────────────────────
+    mcols = st.columns(6)
+    for i, nm in enumerate(alist_full):
         a = AGENT_META_MEM[nm]; f = mem / f"{nm}.md"
         exists = f.exists()
         sz = f"{f.stat().st_size:,}b" if exists else "—"
@@ -708,8 +727,8 @@ with tab_memory:
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(t("memory.evo.agent_title"))
-        acols = st.columns(5)
-        for i, nm in enumerate(alist):
+        acols = st.columns(6)
+        for i, nm in enumerate(alist_full):
             a     = AGENT_META_MEM[nm]
             stats = AgentMemory(nm, mem).get_stats()
             ls    = stats["lessons"]
@@ -745,8 +764,140 @@ with tab_memory:
 
     st.divider()
 
+    # ── Run Time section ───────────────────────────────────────────────────────
+    rt_title = "#### ⏱️ Run Time" if lang == "en" else "#### ⏱️ Tempo de Execução"
+    st.markdown(rt_title)
+    rt_caption = "Performance metrics for the last squad review — duration, tokens, cost, and ROI." \
+        if lang == "en" else \
+        "Métricas de performance da última revisão — duração, tokens, custo e ROI."
+    st.caption(rt_caption)
+
+    rm = st.session_state.get("review_result") and st.session_state["review_result"].run_metrics
+
+    if not rm:
+        no_run_label = "No squad review yet. Run a Squad Review from the Review tab." \
+            if lang == "en" else \
+            "Nenhuma revisão de squad ainda. Execute uma Revisão com Squad na aba Revisão."
+        st.markdown(f"""
+        <div style="background:#f9fafb;border:1.5px dashed #e5e7eb;border-radius:14px;
+        padding:28px;text-align:center">
+          <div style="font-size:2rem;margin-bottom:10px">⏱️</div>
+          <div style="font-size:.9rem;color:#6b7280">{no_run_label}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # ── Top metric row ─────────────────────────────────────────────────────
+        def fmt_s(s: float) -> str:
+            if s < 60: return f"{s:.1f}s"
+            return f"{int(s//60)}m {int(s%60)}s"
+
+        lbl_total  = "Total Time"         if lang=="en" else "Tempo Total"
+        lbl_mgr    = "Manager"            if lang=="en" else "Gerente"
+        lbl_squad  = "Squad (parallel)"   if lang=="en" else "Squad (paralelo)"
+        lbl_synth  = "Synthesizer"        if lang=="en" else "Sintetizador"
+        lbl_tokens = "Tokens Used"        if lang=="en" else "Tokens Usados"
+        lbl_cost   = "Est. Cost"          if lang=="en" else "Custo Est."
+        lbl_roi    = "vs Manual Review"   if lang=="en" else "vs Revisão Manual"
+
+        r1, r2, r3, r4, r5, r6, r7 = st.columns(7)
+        def _rt_card(col, number, label, color="#4f46e5", sub=""):
+            sub_html = f'<div style="font-size:.65rem;color:#9ca3af;margin-top:1px">{sub}</div>' if sub else ""
+            col.markdown(
+                f'<div class="stat"><div class="n" style="color:{color};font-size:1.4rem">{number}</div>'
+                f'<div class="l">{label}</div>{sub_html}</div>',
+                unsafe_allow_html=True
+            )
+
+        _rt_card(r1, fmt_s(rm.total_duration_s),  lbl_total,  "#4f46e5")
+        _rt_card(r2, fmt_s(rm.phase_manager_s),   lbl_mgr,    "#6366f1",
+                 "Phase 0" if lang=="en" else "Fase 0")
+        _rt_card(r3, fmt_s(rm.phase_parallel_s),  lbl_squad,  "#0891b2",
+                 "wall-clock" if lang=="en" else "relógio de parede")
+        _rt_card(r4, fmt_s(rm.phase_synth_s),     lbl_synth,  "#7c3aed")
+        _rt_card(r5, f"{rm.tokens_total:,}",       lbl_tokens, "#ea580c",
+                 f"↑{rm.tokens_in_total:,} ↓{rm.tokens_out_total:,}")
+        _rt_card(r6, f"${rm.cost_usd:.4f}",        lbl_cost,   "#16a34a")
+
+        # ROI card
+        saved = max(0.0, 600.0 - rm.cost_usd)
+        ratio = int(saved / max(rm.cost_usd, 0.001))
+        roi_val = f"{ratio}x" if ratio < 9999 else "∞"
+        r7.markdown(
+            f'<div class="stat"><div class="n" style="color:#16a34a;font-size:1.4rem">{roi_val}</div>'
+            f'<div class="l">{lbl_roi}</div>'
+            f'<div style="font-size:.65rem;color:#9ca3af;margin-top:1px">${saved:,.0f} {"saved" if lang=="en" else "economizados"}</div></div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Per-agent timeline bars ────────────────────────────────────────────
+        agent_title = "**Agent Timeline**" if lang=="en" else "**Timeline dos Agentes**"
+        st.markdown(agent_title)
+
+        AGENT_ICONS = {
+            "manager_agent": "🎯", "security_agent": "🔐",
+            "reliability_agent": "🛡️", "cost_agent": "💰",
+            "observability_agent": "📡", "synthesizer_agent": "🧠",
+        }
+        AGENT_LABELS = {
+            "en": {"manager_agent":"Manager","security_agent":"Security",
+                   "reliability_agent":"Reliability","cost_agent":"Cost",
+                   "observability_agent":"Observability","synthesizer_agent":"Synthesizer"},
+            "pt": {"manager_agent":"Gerente","security_agent":"Segurança",
+                   "reliability_agent":"Confiabilidade","cost_agent":"Custo",
+                   "observability_agent":"Observabilidade","synthesizer_agent":"Sintetizador"},
+        }
+        PHASE_COLORS = {"manager":"#6366f1","parallel":"#0891b2","synthesizer":"#7c3aed"}
+
+        max_dur = max((a.duration_s for a in rm.agents), default=1.0)
+
+        for agent in rm.agents:
+            ic   = AGENT_ICONS.get(agent.agent_name, "🤖")
+            nm   = AGENT_LABELS[lang].get(agent.agent_name, agent.agent_name)
+            bar  = min(int(agent.duration_s / max(max_dur, 0.01) * 100), 100)
+            col  = PHASE_COLORS.get(agent.phase, "#6b7280")
+            toks = f"{agent.tokens_in:,} in · {agent.tokens_out:,} out · ${agent.cost_usd:.4f}" \
+                   if agent.tokens_total > 0 else \
+                   ("no token data" if lang=="en" else "sem dados de token")
+            err_html = f'<span style="color:#dc2626;font-size:.7rem">⚠️ {esc(agent.error[:60])}</span>' \
+                       if agent.error else ""
+            findings_html = f'<span style="color:{col};font-weight:700">{agent.findings_count} {"findings" if lang=="en" else "achados"}</span>' \
+                            if agent.findings_count else ""
+
+            st.markdown(f"""
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="width:24px;text-align:center;font-size:1rem;flex-shrink:0">{ic}</div>
+              <div style="width:110px;flex-shrink:0">
+                <div style="font-weight:600;font-size:.82rem;color:#111">{nm}</div>
+                <div style="font-size:.68rem;color:#9ca3af">{fmt_s(agent.duration_s)}</div>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="background:#f3f4f6;border-radius:999px;height:8px;overflow:hidden">
+                  <div style="background:{col};height:8px;border-radius:999px;width:{bar}%;
+                  transition:width .5s ease"></div>
+                </div>
+                <div style="font-size:.68rem;color:#6b7280;margin-top:3px">{toks} {findings_html} {err_html}</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── Pricing footnote ───────────────────────────────────────────────────
+        note_en = "Cost estimated using Claude Sonnet 4 pricing: $3/M input tokens · $15/M output tokens. " \
+                  "Manual review baseline: senior architect at $150/h × 4h = $600."
+        note_pt = "Custo estimado com preços do Claude Sonnet 4: $3/M tokens de entrada · $15/M de saída. " \
+                  "Baseline de revisão manual: arquiteto sênior a $150/h × 4h = $600."
+        st.caption(f"ℹ️ {note_en if lang=='en' else note_pt}")
+
+        # ── Model & started at ─────────────────────────────────────────────────
+        started_label = "Started at" if lang=="en" else "Iniciado em"
+        model_label   = "Model"      if lang=="en" else "Modelo"
+        st.caption(f"{started_label}: `{rm.started_at[:19].replace('T',' ')} UTC` · {model_label}: `{rm.model_used}`")
+
+    st.divider()
+
     # ── File viewer ────────────────────────────────────────────────────────────
-    sel = st.selectbox(t("memory.view"), alist, format_func=lambda n: f"{AGENT_META_MEM[n]['ic']} {AGENT_META_MEM[n]['nm']}")
+    sel = st.selectbox(t("memory.view"), alist_full, format_func=lambda n: f"{AGENT_META_MEM[n]['ic']} {AGENT_META_MEM[n]['nm']}")
     mf  = mem / f"{sel}.md"
     if mf.exists():
         t1, t2 = st.tabs([t("memory.full"), t("memory.lessons_only")])
