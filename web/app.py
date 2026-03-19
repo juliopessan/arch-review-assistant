@@ -403,14 +403,12 @@ with tab_squad:
         q: Queue = Queue()
 
         def _run(q):
-            """Run ReviewSquad in a thread and stream events back via Queue."""
-            import time
+            """Run ReviewSquad in a dedicated thread with its own event loop."""
+            import asyncio as _aio
             from arch_review.squad.squad import ReviewSquad
 
-            # Stream phase events so the UI can update agent cards
             class EventSquad(ReviewSquad):
-                """Wraps ReviewSquad to emit start/done events per agent."""
-
+                """Emits UI events per agent without changing squad logic."""
                 async def _run_agent(self, agent_name, system_prompt, user_prompt):
                     q.put({"event": "start", "agent": agent_name})
                     result = await super()._run_agent(agent_name, system_prompt, user_prompt)
@@ -422,20 +420,27 @@ with tab_squad:
                     })
                     return result
 
+            # Always create a fresh event loop in this thread
+            # (avoids "no running event loop" or "loop already running" errors)
+            loop = _aio.new_event_loop()
+            _aio.set_event_loop(loop)
             try:
                 sq = EventSquad(model=selected_model)
-                # Emit manager start
                 q.put({"event": "start", "agent": "manager_agent"})
-                review = sq.review(arch_inp)
+                review = loop.run_until_complete(sq._review_async(arch_inp))
                 q.put({"event": "done", "agent": "manager_agent", "count": 0})
                 q.put({"event": "result", "result": review})
             except Exception as exc:
+                import traceback
                 q.put({"event": "error", "agent": "squad", "error": str(exc)})
-
-            q.put({"event": "finished"})
+                q.put({"event": "error_detail", "traceback": traceback.format_exc()})
+            finally:
+                loop.close()
+                q.put({"event": "finished"})
 
         t_thread = threading.Thread(target=_run, args=(q,), daemon=True)
         t_thread.start()
+        error_detail = None
         with st.spinner(rand_msg(msgs["squad"])):
             while True:
                 try:
@@ -446,12 +451,28 @@ with tab_squad:
                 if ev["event"] in ("start", "done", "error"):
                     log.append(ev)
                     st.session_state["squad_log"] = log
+                elif ev["event"] == "error_detail":
+                    error_detail = ev.get("traceback", "")
                 elif ev["event"] == "result":
                     st.session_state["review_result"] = ev["result"]
                 elif ev["event"] == "finished":
                     break
 
         st.session_state["squad_running"] = False
+
+        # Show error if squad failed
+        if not st.session_state.get("review_result") and any(
+            e.get("event") == "error" for e in log
+        ):
+            err_msg = next(
+                (e.get("error", "") for e in log if e.get("event") == "error"), ""
+            )
+            st.error(f"❌ Squad failed: {err_msg}")
+            if error_detail:
+                with st.expander("🔍 Error details"):
+                    st.code(error_detail, language="text")
+            st.stop()
+
         if gen_adrs and "review_result" in st.session_state:
             with st.spinner(rand_msg(msgs["adr"])):
                 try:
