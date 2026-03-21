@@ -250,6 +250,7 @@ class ReviewSquad:
             duration_s=round(phase_manager_s, 2),
             tokens_in=0, tokens_out=0,
             findings_count=0,
+            model_used=self.model,
         ))
 
         # Specialist agents (parallel phase)
@@ -262,6 +263,7 @@ class ReviewSquad:
                 tokens_out=ar.tokens_out,
                 findings_count=len(ar.findings),
                 error=ar.error,
+                model_used=self.model,
             ))
 
         # Synthesizer
@@ -273,6 +275,7 @@ class ReviewSquad:
             tokens_out=synth_result.tokens_out,
             findings_count=len(synth_result.findings),
             error=synth_result.error,
+            model_used=self.model,
         ))
 
         run_metrics = RunMetrics(

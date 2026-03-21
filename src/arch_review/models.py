@@ -8,6 +8,46 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ── Model pricing table (USD per 1M tokens) ────────────────────────────────────
+# Format: "model_id_substring": (input_price, output_price)
+# Matched via substring so partial model IDs work (e.g. "sonnet-4" matches all variants)
+# Prices updated March 2026. Free models (OpenRouter :free) have 0 cost.
+_MODEL_PRICING: list[tuple[str, float, float]] = [
+    # Anthropic
+    ("claude-opus-4",     15.00, 75.00),
+    ("claude-sonnet-4",    3.00, 15.00),
+    ("claude-haiku-4",     0.80,  4.00),
+    # OpenAI
+    ("gpt-4o-mini",        0.15,  0.60),
+    ("gpt-4o",             2.50, 10.00),
+    # Google Gemini 3.x
+    ("gemini-3.1-pro",     3.50, 10.50),
+    ("gemini-3.1-flash",   0.30,  2.50),
+    # Google Gemini 2.5
+    ("gemini-2.5-pro",     1.25, 10.00),
+    ("gemini-2.5-flash-lite", 0.10, 0.40),
+    ("gemini-2.5-flash",   0.30,  2.50),
+    # Mistral
+    ("mistral-large",      2.00,  6.00),
+    # OpenRouter — Chinese free models (zero cost)
+    (":free",              0.00,  0.00),
+    # Ollama (local — zero API cost)
+    ("ollama/",            0.00,  0.00),
+]
+
+_DEFAULT_PRICING = (3.00, 15.00)  # fallback: claude-sonnet-4 pricing
+
+
+def _model_cost(model: str, tokens_in: int, tokens_out: int) -> float:
+    """Calculate cost in USD for given model and token counts."""
+    model_lower = model.lower()
+    for fragment, price_in, price_out in _MODEL_PRICING:
+        if fragment in model_lower:
+            return (tokens_in * price_in + tokens_out * price_out) / 1_000_000
+    p_in, p_out = _DEFAULT_PRICING
+    return (tokens_in * p_in + tokens_out * p_out) / 1_000_000
+
+
 class Severity(str, Enum):
     CRITICAL = "critical"
     HIGH     = "high"
@@ -80,6 +120,7 @@ class AgentRunMetric(BaseModel):
     tokens_out:     int          = 0
     findings_count: int          = 0
     error:          Optional[str] = None
+    model_used:     str          = ""   # populated from ReviewSquad.model
 
     @property
     def tokens_total(self) -> int:
@@ -87,7 +128,7 @@ class AgentRunMetric(BaseModel):
 
     @property
     def cost_usd(self) -> float:
-        return (self.tokens_in * 3.0 + self.tokens_out * 15.0) / 1_000_000
+        return _model_cost(self.model_used, self.tokens_in, self.tokens_out)
 
 
 class RunMetrics(BaseModel):

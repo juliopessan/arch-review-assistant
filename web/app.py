@@ -1365,12 +1365,26 @@ with tab_memory:
             </div>
             """, unsafe_allow_html=True)
 
-        # ── Pricing footnote ───────────────────────────────────────────────────
-        note_en = "Cost estimated using Claude Sonnet 4 pricing: $3/M input tokens · $15/M output tokens. " \
+        # ── Pricing footnote (dynamic, based on actual model used) ────────────
+        from arch_review.models import _MODEL_PRICING, _DEFAULT_PRICING
+        m_lower = rm.model_used.lower()
+        p_in, p_out = _DEFAULT_PRICING
+        for frag, pi, po in _MODEL_PRICING:
+            if frag in m_lower:
+                p_in, p_out = pi, po
+                break
+        is_free = ":free" in m_lower or "ollama/" in m_lower
+        if is_free:
+            pricing_str = "free tier (OpenRouter :free or Ollama)" if lang == "en" \
+                else "tier gratuito (OpenRouter :free ou Ollama)"
+        else:
+            pricing_str = f"${p_in}/M input · ${p_out}/M output"
+
+        note_en = f"Cost estimated using `{rm.model_used}` pricing: {pricing_str}. " \
                   "Manual review baseline: senior architect at $150/h × 4h = $600."
-        note_pt = "Custo estimado com preços do Claude Sonnet 4: $3/M tokens de entrada · $15/M de saída. " \
-                  "Baseline de revisão manual: arquiteto sênior a $150/h × 4h = $600."
-        st.caption(f"ℹ️ {note_en if lang=='en' else note_pt}")
+        note_pt = f"Custo estimado com preços do `{rm.model_used}`: {pricing_str}. " \
+                  "Baseline revisão manual: arquiteto sênior a $150/h × 4h = $600."
+        st.caption(f"ℹ️ {note_en if lang == 'en' else note_pt}")
 
         # ── Model & started at ─────────────────────────────────────────────────
         started_label = "Started at" if lang=="en" else "Iniciado em"
