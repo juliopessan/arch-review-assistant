@@ -26,13 +26,19 @@ from arch_review.squad.manager import AgentManager, OrchestrationPlan
 from arch_review.squad.memory import AgentMemory, SquadMemory
 from arch_review.squad.prompts import (
     COST_SYSTEM,
+    MAINTAINABILITY_SYSTEM,
     OBSERVABILITY_SYSTEM,
+    PERFORMANCE_SYSTEM,
     RELIABILITY_SYSTEM,
+    SCALABILITY_SYSTEM,
     SECURITY_SYSTEM,
     SYNTHESIZER_SYSTEM,
     build_cost_prompt,
+    build_maintainability_prompt,
     build_observability_prompt,
+    build_performance_prompt,
     build_reliability_prompt,
+    build_scalability_prompt,
     build_security_prompt,
     build_synthesizer_prompt,
 )
@@ -84,10 +90,13 @@ class ReviewSquad:
     """
 
     AGENTS = [
-        ("security_agent",      SECURITY_SYSTEM,      build_security_prompt),
-        ("reliability_agent",   RELIABILITY_SYSTEM,   build_reliability_prompt),
-        ("cost_agent",          COST_SYSTEM,           build_cost_prompt),
-        ("observability_agent", OBSERVABILITY_SYSTEM,  build_observability_prompt),
+        ("security_agent",        SECURITY_SYSTEM,        build_security_prompt),
+        ("reliability_agent",     RELIABILITY_SYSTEM,     build_reliability_prompt),
+        ("cost_agent",            COST_SYSTEM,             build_cost_prompt),
+        ("observability_agent",   OBSERVABILITY_SYSTEM,   build_observability_prompt),
+        ("scalability_agent",     SCALABILITY_SYSTEM,     build_scalability_prompt),
+        ("performance_agent",     PERFORMANCE_SYSTEM,     build_performance_prompt),
+        ("maintainability_agent", MAINTAINABILITY_SYSTEM, build_maintainability_prompt),
     ]
 
     def __init__(

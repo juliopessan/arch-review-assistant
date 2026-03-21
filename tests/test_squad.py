@@ -50,9 +50,31 @@ MOCK_SYNTH_RESPONSE = {
     "lesson_for_memory": "Synthesis: auth gaps often coexist with SPOF issues.",
 }
 
+MOCK_MANAGER_RESPONSE = {
+    "architecture_type": "microservices",
+    "complexity": "medium",
+    "top_risks": ["No inter-service authentication", "Single point of failure on DB"],
+    "compliance_flags": ["PCI-DSS"],
+    "cloud_providers": ["AWS"],
+    "agent_directives": [
+        {"agent_name": "security_agent",        "enabled": True,  "priority": "critical", "focus_note": "Check auth between Order and Payment", "skip_reason": ""},
+        {"agent_name": "reliability_agent",      "enabled": True,  "priority": "high",     "focus_note": "Single DB is a SPOF",                  "skip_reason": ""},
+        {"agent_name": "cost_agent",             "enabled": True,  "priority": "normal",   "focus_note": "Check EC2 sizing",                     "skip_reason": ""},
+        {"agent_name": "observability_agent",    "enabled": True,  "priority": "normal",   "focus_note": "Check distributed tracing",            "skip_reason": ""},
+        {"agent_name": "scalability_agent",      "enabled": True,  "priority": "high",     "focus_note": "Single DB limits write scale",         "skip_reason": ""},
+        {"agent_name": "performance_agent",      "enabled": True,  "priority": "normal",   "focus_note": "Sync payment call adds latency",       "skip_reason": ""},
+        {"agent_name": "maintainability_agent",  "enabled": True,  "priority": "low",      "focus_note": "Shared DB couples services",           "skip_reason": ""},
+    ],
+    "manager_briefing": "Banking API with critical auth gaps and single DB SPOF.",
+    "manager_lesson": "Classified this as microservices with shared DB anti-pattern.",
+}
+
+
 def _make_mock_llm(content: str) -> MagicMock:
     mock = MagicMock()
     mock.choices[0].message.content = content
+    mock.usage.prompt_tokens = 100
+    mock.usage.completion_tokens = 50
     return mock
 
 
@@ -143,39 +165,47 @@ class TestSquadMemory:
 # ── Squad tests ───────────────────────────────────────────────────────────────
 
 class TestReviewSquad:
-    def test_agent_manager_creates_orchestration_plan(self) -> None:
-        manager = AgentManager()
-        plan = manager.create_plan(
-            ArchitectureInput(
-                description=(
-                    "API Gateway routes to microservices. RabbitMQ handles events. "
-                    "Logs written to local files. Single EC2 instance. JWT auth."
-                ),
-                context="LGPD compliance required on AWS",
-            )
+    def test_agent_manager_creates_orchestration_plan(self, tmp_path: Path) -> None:
+        """AgentManager.analyze() returns a valid OrchestrationPlan with defaults."""
+        manager = AgentManager(memory_dir=tmp_path)
+        plan = manager._default_plan()
+
+        # Default plan enables all 7 specialist agents
+        assert len(plan.agent_directives) == 7
+        assert all(d.enabled for d in plan.agent_directives)
+        assert set(plan.active_agents) == {
+            "security_agent", "reliability_agent", "cost_agent", "observability_agent",
+            "scalability_agent", "performance_agent", "maintainability_agent",
+        }
+        assert plan.skipped_agents == []
+        assert plan.complexity == "medium"
+
+    def test_agent_manager_can_skip_cost_agent_for_on_prem(self, tmp_path: Path) -> None:
+        """AgentDirective supports disabled agents via get_directive()."""
+        from arch_review.squad.manager import AgentDirective, OrchestrationPlan
+        plan = OrchestrationPlan(
+            architecture_type="monolith",
+            complexity="low",
+            top_risks=[],
+            compliance_flags=[],
+            cloud_providers=[],
+            agent_directives=[
+                AgentDirective(agent_name="security_agent",      enabled=True,  priority="high"),
+                AgentDirective(agent_name="reliability_agent",   enabled=True,  priority="normal"),
+                AgentDirective(agent_name="cost_agent",          enabled=False, priority="low",
+                               skip_reason="on-prem deployment, no cloud cost concerns"),
+                AgentDirective(agent_name="observability_agent", enabled=True,  priority="normal"),
+            ],
         )
-
-        assert plan.architecture_type in {"event-driven distributed system", "microservices platform"}
-        assert plan.complexity in {"medium", "high"}
-        assert "LGPD" in plan.compliance_flags
-        assert "aws" in plan.cloud_providers
-        assert len(plan.agent_plans) == 4
-
-    def test_agent_manager_can_skip_cost_agent_for_on_prem(self) -> None:
-        manager = AgentManager()
-        plan = manager.create_plan(
-            ArchitectureInput(
-                description="Monolith deployed on-prem in a private datacenter with bare metal servers.",
-            )
-        )
-
-        cost_plan = next(item for item in plan.agent_plans if item.agent_name == "cost_agent")
-        assert cost_plan.active is False
-        assert cost_plan.priority == "low"
+        cost_d = plan.get_directive("cost_agent")
+        assert cost_d.enabled is False
+        assert cost_d.priority == "low"
+        assert "cost_agent" in plan.skipped_agents
+        assert len(plan.active_agents) == 3
 
     def test_init_creates_memories(self, tmp_path: Path) -> None:
         sq = ReviewSquad(model="claude-sonnet-4-20250514", memory_dir=tmp_path)
-        assert len(sq.agent_memories) == 6  # manager + 4 agents + synthesizer
+        assert len(sq.agent_memories) == 9  # manager + 7 agents + synthesizer
         assert sq.squad_memory is not None
 
     def test_parse_json_valid(self, tmp_path: Path) -> None:
@@ -219,13 +249,17 @@ class TestReviewSquad:
 
     @patch("arch_review.squad.squad.litellm.completion")
     def test_full_squad_review(self, mock_completion: MagicMock, tmp_path: Path) -> None:
-        # First 4 calls = specialized agents, 5th = synthesizer
+        # manager(1) + 7 specialist agents + synthesizer(1) = 9 calls total
         mock_completion.side_effect = [
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_SYNTH_RESPONSE)),
+            _make_mock_llm(json.dumps(MOCK_MANAGER_RESPONSE)),  # manager
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # security
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # reliability
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # cost
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # observability
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # scalability
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # performance
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # maintainability
+            _make_mock_llm(json.dumps(MOCK_SYNTH_RESPONSE)),  # synthesizer
         ]
 
         sq = ReviewSquad(model="claude-sonnet-4-20250514", memory_dir=tmp_path)
@@ -237,17 +271,20 @@ class TestReviewSquad:
         assert "squad:" in result.model_used
         assert len(result.senior_architect_questions) > 0
         assert result.orchestration_plan is not None
-        assert len(result.orchestration_plan.agent_plans) == 4
-        assert mock_completion.call_count == 5
+        assert mock_completion.call_count == 9
 
     @patch("arch_review.squad.squad.litellm.completion")
     def test_squad_updates_memory_after_review(self, mock_completion: MagicMock, tmp_path: Path) -> None:
         mock_completion.side_effect = [
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),
-            _make_mock_llm(json.dumps(MOCK_SYNTH_RESPONSE)),
+            _make_mock_llm(json.dumps(MOCK_MANAGER_RESPONSE)),  # manager
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # security
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # reliability
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # cost
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # observability
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # scalability
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # performance
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # maintainability
+            _make_mock_llm(json.dumps(MOCK_SYNTH_RESPONSE)),  # synthesizer
         ]
 
         sq = ReviewSquad(memory_dir=tmp_path)
@@ -270,10 +307,14 @@ class TestReviewSquad:
     ) -> None:
         # One agent throws, others succeed, synthesizer succeeds
         mock_completion.side_effect = [
+            _make_mock_llm(json.dumps(MOCK_MANAGER_RESPONSE)),  # manager
             _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # security OK
             Exception("LLM timeout"),                          # reliability fails
             _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # cost OK
             _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # observability OK
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # scalability OK
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # performance OK
+            _make_mock_llm(json.dumps(MOCK_AGENT_RESPONSE)),  # maintainability OK
             _make_mock_llm(json.dumps(MOCK_SYNTH_RESPONSE)),  # synthesizer OK
         ]
 

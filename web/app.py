@@ -1001,30 +1001,37 @@ with tab_export:
 with tab_memory:
     from arch_review.squad.memory import DEFAULT_MEMORY_DIR, AgentMemory, SquadMemory
     mem   = DEFAULT_MEMORY_DIR
-    alist = ["security_agent","reliability_agent","cost_agent","observability_agent","synthesizer_agent"]
+    alist = [
+        "security_agent", "reliability_agent", "cost_agent", "observability_agent",
+        "scalability_agent", "performance_agent", "maintainability_agent", "synthesizer_agent",
+    ]
     alist_full = alist + ["manager_agent"]
     AGENT_META_MEM = {
-        "security_agent":      {"ic":"🔐","nm":t("agent.security.nm")},
-        "reliability_agent":   {"ic":"🛡️","nm":t("agent.reliability.nm")},
-        "cost_agent":          {"ic":"💰","nm":t("agent.cost.nm")},
-        "observability_agent": {"ic":"📡","nm":t("agent.observability.nm")},
-        "synthesizer_agent":   {"ic":"🧠","nm":t("agent.synthesizer.nm")},
-        "manager_agent":       {"ic":"🎯","nm":"Agent Manager"},
+        "security_agent":        {"ic": "🔐", "nm": t("agent.security.nm")},
+        "reliability_agent":     {"ic": "🛡️", "nm": t("agent.reliability.nm")},
+        "cost_agent":            {"ic": "💰", "nm": t("agent.cost.nm")},
+        "observability_agent":   {"ic": "📡", "nm": t("agent.observability.nm")},
+        "scalability_agent":     {"ic": "📈", "nm": "Scalability" if lang == "en" else "Escalabilidade"},
+        "performance_agent":     {"ic": "⚡", "nm": "Performance"},
+        "maintainability_agent": {"ic": "🔧", "nm": "Maintainability" if lang == "en" else "Manutenibilidade"},
+        "synthesizer_agent":     {"ic": "🧠", "nm": t("agent.synthesizer.nm")},
+        "manager_agent":         {"ic": "🎯", "nm": "Agent Manager"},
     }
 
     st.markdown(t("memory.title"))
     st.caption(t("memory.caption"))
 
-    # ── Agent status cards (6 agents including Manager) ───────────────────────
-    mcols = st.columns(6)
-    for i, nm in enumerate(alist_full):
-        a = AGENT_META_MEM[nm]; f = mem / f"{nm}.md"
-        exists = f.exists()
-        sz = f"{f.stat().st_size:,}b" if exists else "—"
-        ls = f.read_text().count("## Lesson") if exists else 0
-        with mcols[i]:
-            css = "live" if exists else ""
-            st.markdown(f'<div class="memcard {css}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="sz">{sz}</div><div class="ls">{ls} {t("memory.lessons")}</div></div>', unsafe_allow_html=True)
+    # ── Agent status cards (9 agents: 3 rows of 3) ───────────────────────────
+    for row_agents in [alist_full[:3], alist_full[3:6], alist_full[6:]]:
+        mcols = st.columns(len(row_agents))
+        for i, nm in enumerate(row_agents):
+            a = AGENT_META_MEM[nm]; f = mem / f"{nm}.md"
+            exists = f.exists()
+            sz = f"{f.stat().st_size:,}b" if exists else "—"
+            ls = f.read_text().count("## Lesson") if exists else 0
+            with mcols[i]:
+                css = "live" if exists else ""
+                st.markdown(f'<div class="memcard {css}"><div class="ic">{a["ic"]}</div><div class="nm">{a["nm"]}</div><div class="sz">{sz}</div><div class="ls">{ls} {t("memory.lessons")}</div></div>', unsafe_allow_html=True)
 
     sqf = mem / "SQUAD_MEMORY.md"
     if sqf.exists():
@@ -1070,8 +1077,8 @@ with tab_memory:
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(t("memory.evo.agent_title"))
-        acols = st.columns(6)
-        for i, nm in enumerate(alist_full):
+
+        def _agent_evo_card(nm):
             a     = AGENT_META_MEM[nm]
             stats = AgentMemory(nm, mem).get_stats()
             ls    = stats["lessons"]
@@ -1082,24 +1089,29 @@ with tab_memory:
             elif ls < 8:  level, color = t("memory.evo.experienced"), "#0891b2"
             else:         level, color = t("memory.evo.expert"),      "#7c3aed"
             bar_w = min(int(ls / 10 * 100), 100)
-            with acols[i]:
-                st.markdown(f"""
-                <div style="background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;
-                padding:16px 12px;text-align:center">
-                  <div style="font-size:1.6rem;margin-bottom:6px">{a["ic"]}</div>
-                  <div style="font-weight:700;font-size:.82rem;color:#111">{a["nm"]}</div>
-                  <div style="font-size:.72rem;font-weight:700;color:{color};margin:6px 0 4px">{level}</div>
-                  <div style="background:#f3f4f6;border-radius:999px;height:5px;margin:6px 0">
-                    <div style="background:{color};height:5px;border-radius:999px;width:{bar_w}%"></div>
-                  </div>
-                  <div style="font-size:.68rem;color:#6b7280;margin-top:6px">
-                    {ls} {t("memory.evo.lessons_lbl")} · {pt} {t("memory.evo.patterns_lbl")}
-                  </div>
-                  <div style="font-size:.65rem;color:#9ca3af;margin-top:2px">
-                    {t("memory.evo.last")} {last}
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="background:#fff;border:1.5px solid #E0E0E0;border-radius:10px;
+            padding:14px 10px;text-align:center">
+              <div style="font-size:1.4rem;margin-bottom:4px">{a["ic"]}</div>
+              <div style="font-weight:700;font-size:.8rem;color:#2E2E2E">{a["nm"]}</div>
+              <div style="font-size:.7rem;font-weight:700;color:{color};margin:5px 0 3px">{level}</div>
+              <div style="background:#F5F5F5;border-radius:999px;height:4px;margin:5px 0">
+                <div style="background:{color};height:4px;border-radius:999px;width:{bar_w}%"></div>
+              </div>
+              <div style="font-size:.67rem;color:#666;margin-top:4px">
+                {ls} {t("memory.evo.lessons_lbl")} · {pt} {t("memory.evo.patterns_lbl")}
+              </div>
+              <div style="font-size:.64rem;color:#9ca3af;margin-top:2px">
+                {t("memory.evo.last")} {last}
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        for row_nms in [alist_full[:3], alist_full[3:6], alist_full[6:]]:
+            acols = st.columns(len(row_nms))
+            for i, nm in enumerate(row_nms):
+                with acols[i]:
+                    _agent_evo_card(nm)
 
         st.divider()
         st.markdown(t("memory.evo.how_title"))
@@ -1182,14 +1194,20 @@ with tab_memory:
             "manager_agent": "🎯", "security_agent": "🔐",
             "reliability_agent": "🛡️", "cost_agent": "💰",
             "observability_agent": "📡", "synthesizer_agent": "🧠",
+            "scalability_agent": "📈", "performance_agent": "⚡",
+            "maintainability_agent": "🔧",
         }
         AGENT_LABELS = {
             "en": {"manager_agent":"Manager","security_agent":"Security",
                    "reliability_agent":"Reliability","cost_agent":"Cost",
-                   "observability_agent":"Observability","synthesizer_agent":"Synthesizer"},
+                   "observability_agent":"Observability","synthesizer_agent":"Synthesizer",
+                   "scalability_agent":"Scalability","performance_agent":"Performance",
+                   "maintainability_agent":"Maintainability"},
             "pt": {"manager_agent":"Gerente","security_agent":"Segurança",
                    "reliability_agent":"Confiabilidade","cost_agent":"Custo",
-                   "observability_agent":"Observabilidade","synthesizer_agent":"Sintetizador"},
+                   "observability_agent":"Observabilidade","synthesizer_agent":"Sintetizador",
+                   "scalability_agent":"Escalabilidade","performance_agent":"Performance",
+                   "maintainability_agent":"Manutenibilidade"},
         }
         PHASE_COLORS = {"manager":"#6366f1","parallel":"#0891b2","synthesizer":"#7c3aed"}
 

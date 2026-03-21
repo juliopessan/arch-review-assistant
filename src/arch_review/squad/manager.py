@@ -73,15 +73,27 @@ You produce a JSON orchestration plan. You ALWAYS respond with valid JSON only."
 MANAGER_PROMPT = """\
 Analyze this architecture and produce an orchestration plan for the review squad.
 
-The squad has 4 specialist agents:
-- security_agent: auth, secrets, compliance, attack vectors
-- reliability_agent: SPOFs, resilience, cascading failures, RTO/RPO
-- cost_agent: FinOps, right-sizing, data transfer, cloud economics
-- observability_agent: logs, metrics, tracing, alerting, incident readiness
+The squad has 7 specialist agents:
+- security_agent:        auth, secrets, compliance, attack vectors, supply chain
+- reliability_agent:     SPOFs, resilience, cascading failures, RTO/RPO, DR
+- cost_agent:            FinOps, right-sizing, data transfer, cloud economics
+- observability_agent:   logs, metrics, tracing, alerting, incident readiness
+- scalability_agent:     horizontal scaling, stateless design, bottlenecks, event-driven
+- performance_agent:     latency hotspots, N+1 queries, caching, CDN, critical path
+- maintainability_agent: coupling, tech debt, testability, deployment complexity, contracts
+
+SMART ACTIVATION RULES — apply these:
+- cost_agent:            disable ONLY for on-prem/air-gapped with zero cloud components
+- scalability_agent:     disable for simple internal tools with <100 users, or pure batch jobs
+- performance_agent:     disable for non-user-facing systems (async batch, data pipelines)
+- maintainability_agent: disable ONLY for throwaway prototypes or pure infrastructure-as-code
+- security_agent:        ALWAYS enable — every system has security concerns
+- reliability_agent:     ALWAYS enable — every system can fail
+- observability_agent:   ALWAYS enable — every system needs to be debugged
 
 Return a JSON object with this exact schema:
 {{
-  "architecture_type": "string — e.g. microservices, monolith, serverless, hybrid",
+  "architecture_type": "string — e.g. microservices, monolith, serverless, hybrid, data-pipeline",
   "complexity": "low | medium | high",
   "top_risks": ["up to 3 highest-level risks you spotted immediately"],
   "compliance_flags": ["any compliance regimes mentioned or implied, e.g. LGPD, GDPR, PCI-DSS, HIPAA, SOC2"],
@@ -91,41 +103,62 @@ Return a JSON object with this exact schema:
       "agent_name": "security_agent",
       "enabled": true,
       "priority": "critical | high | normal | low",
-      "focus_note": "string — specific things this agent MUST look at in this architecture",
+      "focus_note": "specific things this agent MUST look at in THIS architecture",
       "skip_reason": ""
     }},
     {{
       "agent_name": "reliability_agent",
       "enabled": true,
       "priority": "critical | high | normal | low",
-      "focus_note": "string — specific reliability concerns for this architecture",
+      "focus_note": "specific reliability concerns for this architecture",
       "skip_reason": ""
     }},
     {{
       "agent_name": "cost_agent",
       "enabled": true,
       "priority": "critical | high | normal | low",
-      "focus_note": "string — specific cost concerns, or skip if on-prem/no cloud",
-      "skip_reason": "reason if enabled=false, else empty string"
+      "focus_note": "specific cost concerns, or reason to skip",
+      "skip_reason": ""
     }},
     {{
       "agent_name": "observability_agent",
       "enabled": true,
       "priority": "critical | high | normal | low",
-      "focus_note": "string — specific observability gaps to look for",
+      "focus_note": "specific observability gaps to look for",
+      "skip_reason": ""
+    }},
+    {{
+      "agent_name": "scalability_agent",
+      "enabled": true,
+      "priority": "critical | high | normal | low",
+      "focus_note": "specific bottlenecks and scaling paths to investigate",
+      "skip_reason": ""
+    }},
+    {{
+      "agent_name": "performance_agent",
+      "enabled": true,
+      "priority": "critical | high | normal | low",
+      "focus_note": "specific latency hotspots and critical user paths to trace",
+      "skip_reason": ""
+    }},
+    {{
+      "agent_name": "maintainability_agent",
+      "enabled": true,
+      "priority": "critical | high | normal | low",
+      "focus_note": "specific coupling points, debt, and deployment risks to examine",
       "skip_reason": ""
     }}
   ],
-  "manager_briefing": "string — key context for the Synthesizer about this architecture's most important characteristics",
+  "manager_briefing": "string — key context for the Synthesizer: architecture characteristics, highest-priority domains, agents disabled and why",
   "manager_lesson": "string — one thing this architecture taught you that's worth remembering"
 }}
 
 Rules:
-- Set an agent to enabled=false ONLY if it is completely irrelevant (e.g. cost_agent for an on-prem air-gapped system)
-- priority=critical means this agent's domain is the most urgent concern for this architecture
-- focus_note should be SPECIFIC — reference actual component names from the description
-- compliance_flags should include anything implied, not just explicit mentions
-- top_risks should be the 3 things that would hurt most in production
+- Set enabled=false per the SMART ACTIVATION RULES above — be decisive, not conservative
+- priority=critical means this domain is the #1 concern for this specific architecture
+- focus_note MUST reference actual component names from the description — no generic text
+- top_risks: the 3 things that would cause a production incident soonest
+- compliance_flags: include anything implied by the domain (e.g. healthcare → HIPAA)
 - Output ONLY the JSON, no preamble or markdown
 
 ARCHITECTURE:
@@ -219,9 +252,12 @@ class AgentManager:
                 skip_reason=d.get("skip_reason", ""),
             ))
 
-        # Ensure all 4 agents have a directive (fill missing with defaults)
+        # Ensure all 7 agents have a directive (fill missing with defaults)
         existing = {d.agent_name for d in directives}
-        for name in ["security_agent","reliability_agent","cost_agent","observability_agent"]:
+        for name in [
+            "security_agent", "reliability_agent", "cost_agent", "observability_agent",
+            "scalability_agent", "performance_agent", "maintainability_agent",
+        ]:
             if name not in existing:
                 directives.append(AgentDirective(agent_name=name))
 
@@ -237,7 +273,7 @@ class AgentManager:
         )
 
     def _default_plan(self) -> OrchestrationPlan:
-        """Fallback plan when manager LLM call fails — enable all agents normally."""
+        """Fallback plan when manager LLM call fails — enable all 7 agents normally."""
         return OrchestrationPlan(
             architecture_type="unknown",
             complexity="medium",
@@ -249,6 +285,9 @@ class AgentManager:
                 AgentDirective(agent_name="reliability_agent"),
                 AgentDirective(agent_name="cost_agent"),
                 AgentDirective(agent_name="observability_agent"),
+                AgentDirective(agent_name="scalability_agent"),
+                AgentDirective(agent_name="performance_agent"),
+                AgentDirective(agent_name="maintainability_agent"),
             ],
             manager_briefing="",
         )

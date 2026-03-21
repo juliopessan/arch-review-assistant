@@ -12,12 +12,15 @@ from __future__ import annotations
 import json
 
 AGENT_DEFS = [
-    {"key": "manager_agent",       "ic": "🎯", "nm_en": "Manager",       "nm_pt": "Gerente",        "variant": 0},
-    {"key": "security_agent",      "ic": "🔐", "nm_en": "Security",      "nm_pt": "Segurança",      "variant": 1},
-    {"key": "reliability_agent",   "ic": "🛡️", "nm_en": "Reliability",   "nm_pt": "Confiabilidade", "variant": 2},
-    {"key": "cost_agent",          "ic": "💰", "nm_en": "Cost",           "nm_pt": "Custo",          "variant": 3},
-    {"key": "observability_agent", "ic": "📡", "nm_en": "Observability",  "nm_pt": "Observabilidade","variant": 4},
-    {"key": "synthesizer_agent",   "ic": "🧠", "nm_en": "Synthesizer",   "nm_pt": "Sintetizador",   "variant": 5},
+    {"key": "manager_agent",         "ic": "🎯", "nm_en": "Manager",         "nm_pt": "Gerente",          "variant": 0},
+    {"key": "security_agent",        "ic": "🔐", "nm_en": "Security",        "nm_pt": "Segurança",        "variant": 1},
+    {"key": "reliability_agent",     "ic": "🛡️", "nm_en": "Reliability",     "nm_pt": "Confiabilidade",   "variant": 2},
+    {"key": "cost_agent",            "ic": "💰", "nm_en": "Cost",             "nm_pt": "Custo",            "variant": 3},
+    {"key": "observability_agent",   "ic": "📡", "nm_en": "Observability",   "nm_pt": "Observabilidade",  "variant": 4},
+    {"key": "scalability_agent",     "ic": "📈", "nm_en": "Scalability",     "nm_pt": "Escalabilidade",   "variant": 5},
+    {"key": "performance_agent",     "ic": "⚡", "nm_en": "Performance",     "nm_pt": "Performance",      "variant": 0},
+    {"key": "maintainability_agent", "ic": "🔧", "nm_en": "Maintainability", "nm_pt": "Manutenibilidade", "variant": 2},
+    {"key": "synthesizer_agent",     "ic": "🧠", "nm_en": "Synthesizer",     "nm_pt": "Sintetizador",     "variant": 4},
 ]
 
 
@@ -535,10 +538,11 @@ class Agent {{
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SCENE LAYOUT
 // ═══════════════════════════════════════════════════════════════════════════════
-// Grid: 4 columns, 3 rows of desks
-// Row 0 (top): Manager (center, cols 1-2)
-// Row 1: Security, Reliability, Cost, Observability
-// Row 2 (bottom): Synthesizer (center, cols 1-2)
+// Grid: 4 columns, 4 rows
+// Row 0: Manager            (center cols 1-2)
+// Row 1: Security, Reliability, Cost, Observability   (all 4 cols)
+// Row 2: Scalability, Performance (wider), Maintainability
+// Row 3: Synthesizer        (center cols 1-2)
 
 // [startCol, endCol, row, agentIdx]
 const LAYOUT = [
@@ -547,10 +551,13 @@ const LAYOUT = [
   [1,1, 1, 2],  // Reliability
   [2,2, 1, 3],  // Cost
   [3,3, 1, 4],  // Observability
-  [1,2, 2, 5],  // Synthesizer
+  [0,0, 2, 5],  // Scalability
+  [1,2, 2, 6],  // Performance (wider, center)
+  [3,3, 2, 7],  // Maintainability
+  [1,2, 3, 8],  // Synthesizer
 ];
 
-const NCOLS=4, NROWS=3;
+const NCOLS=4, NROWS=4;
 const PAD=12, VPAD=40, CARDSPACE=38;
 
 let agents=[];
@@ -690,7 +697,7 @@ window.addEventListener('load',()=>{{
 
 def build_agent_states(log: list[dict]) -> dict:
     states = {"manager_agent": {"status": "idle", "count": 0}}
-    for agent_def in AGENT_DEFS[1:]:
+    for agent_def in AGENT_DEFS[1:]:  # skip manager
         key  = agent_def["key"]
         evts = [v for v in log if v.get("agent") == key]
         if any(v["event"] == "error" for v in evts):

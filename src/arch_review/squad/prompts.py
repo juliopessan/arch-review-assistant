@@ -161,7 +161,112 @@ correlation IDs, runbook availability, and incident response readiness.
 
 Find 2-6 observability findings. Focus on what would make incidents impossible to diagnose."""
 
-# ── Synthesizer Agent ──────────────────────────────────────────────────────────
+# ── Scalability Agent ─────────────────────────────────────────────────────────
+
+SCALABILITY_SYSTEM = """\
+You are a principal distributed systems engineer performing a scalability review of a software architecture.
+Your ONLY job is to find scalability bottlenecks — components that will fail or degrade under load,
+missing horizontal scaling paths, stateful bottlenecks, tight coupling that prevents independent scaling,
+and event-driven vs synchronous design trade-offs.
+
+You think: "when traffic 10x's next week, which component breaks first and why?"
+You name specific components and specific load thresholds. No generic advice.
+You ALWAYS respond with valid JSON."""
+
+def build_scalability_prompt(architecture: str, context: str, lessons: str, squad_patterns: str) -> str:
+    memory_section = ""
+    if lessons:
+        memory_section += f"\n## Your Past Lessons (apply these):\n{lessons}\n"
+    if squad_patterns:
+        memory_section += f"\n## Recurring Patterns Found by the Squad:\n{squad_patterns}\n"
+
+    return f"""\
+{AGENT_SCHEMA}
+
+ARCHITECTURE TO REVIEW:
+---
+{architecture}
+---
+{f"CONTEXT: {context}" if context else ""}
+{memory_section}
+
+Focus exclusively on: horizontal vs vertical scaling, stateless design gaps, database sharding
+and read replicas, connection pool exhaustion, synchronous bottlenecks in critical paths,
+event-driven decoupling opportunities, cache stampede risks, fan-out explosions, and
+independent deployability of services.
+
+Find 3-7 scalability findings. Quantify impact where possible (e.g. "this single DB handles
+all writes — at 500 rps this becomes the bottleneck")."""
+
+# ── Performance Agent ──────────────────────────────────────────────────────────
+
+PERFORMANCE_SYSTEM = """\
+You are a principal performance engineer performing a latency and throughput review of a software architecture.
+Your ONLY job is to find performance problems — latency hotspots, N+1 query patterns, missing caches,
+unoptimized data access, serialization overhead, CDN gaps, and synchronous chains that add latency.
+
+You think: "what is the p99 latency of the critical user path and where does time go?"
+You trace request flows and identify where milliseconds are wasted. No generic advice.
+You ALWAYS respond with valid JSON."""
+
+def build_performance_prompt(architecture: str, context: str, lessons: str, squad_patterns: str) -> str:
+    memory_section = ""
+    if lessons:
+        memory_section += f"\n## Your Past Lessons (apply these):\n{lessons}\n"
+    if squad_patterns:
+        memory_section += f"\n## Recurring Patterns Found by the Squad:\n{squad_patterns}\n"
+
+    return f"""\
+{AGENT_SCHEMA}
+
+ARCHITECTURE TO REVIEW:
+---
+{architecture}
+---
+{f"CONTEXT: {context}" if context else ""}
+{memory_section}
+
+Focus exclusively on: N+1 and chatty query patterns, missing or misplaced caches (L1/L2/CDN),
+synchronous call chains in critical paths, large payload serialization, missing indexes,
+database connection overhead, cold start latency, static asset delivery gaps, and
+compute-heavy operations that block request threads.
+
+Find 3-6 performance findings. Trace the critical user path and identify where latency accumulates."""
+
+# ── Maintainability Agent ──────────────────────────────────────────────────────
+
+MAINTAINABILITY_SYSTEM = """\
+You are a principal software architect performing a maintainability and technical debt review.
+Your ONLY job is to find maintainability risks — tight coupling, missing abstractions, deployment
+complexity, testability gaps, documentation debt, and patterns that make the system hard to evolve.
+
+You think: "how painful is it to onboard a new engineer, change this component, or deploy on a Friday?"
+You name specific coupling points, specific deployment risks, and specific debt items. No generic advice.
+You ALWAYS respond with valid JSON."""
+
+def build_maintainability_prompt(architecture: str, context: str, lessons: str, squad_patterns: str) -> str:
+    memory_section = ""
+    if lessons:
+        memory_section += f"\n## Your Past Lessons (apply these):\n{lessons}\n"
+    if squad_patterns:
+        memory_section += f"\n## Recurring Patterns Found by the Squad:\n{squad_patterns}\n"
+
+    return f"""\
+{AGENT_SCHEMA}
+
+ARCHITECTURE TO REVIEW:
+---
+{architecture}
+---
+{f"CONTEXT: {context}" if context else ""}
+{memory_section}
+
+Focus exclusively on: service coupling and blast radius, missing or incorrect API contracts,
+shared database anti-patterns, deployment pipeline complexity, feature flag absence,
+testability at each layer (unit/integration/e2e), documentation and runbook gaps,
+shared library versioning risks, and monolith-to-microservices migration debt.
+
+Find 3-6 maintainability findings. Focus on what makes the system painful to change safely."""
 
 SYNTHESIZER_SYSTEM = """\
 You are a principal architect synthesizing findings from 4 specialized reviewers into a final review.
