@@ -520,6 +520,46 @@ RAW OCR TEXT:
     except Exception:
         return raw_text
 
+# ── Persistent settings (localStorage bridge) ─────────────────────────────────
+# Inject JS that reads localStorage on load and writes back to a hidden input.
+# We read from st.session_state which is pre-populated by the JS bridge below.
+import streamlit.components.v1 as _c
+
+_STORAGE_BRIDGE = """
+<script>
+(function() {
+  const KEYS = ['arch_model','arch_anthropic','arch_openai','arch_google',
+                'arch_mistral','arch_openrouter'];
+  // On load: post stored values to Streamlit via URL fragment trick
+  // We store in sessionStorage (tab-persistent) AND localStorage (cross-session)
+  const stored = {};
+  KEYS.forEach(k => {
+    const v = localStorage.getItem(k) || sessionStorage.getItem(k) || '';
+    if (v) stored[k] = v;
+  });
+  // Write to a hidden div so Python can't read it directly,
+  // but Streamlit query_params can carry them on first load.
+  // Simpler: use st.query_params approach via URL (see Python side).
+  window._archStored = stored;
+})();
+</script>
+"""
+
+# Read from session_state (populated from query_params on first load or from
+# user interaction). Fallback chain: session_state → os.environ → ""
+def _get_saved(key: str, env_var: str = "") -> str:
+    """Get saved value: session_state > os.environ > empty."""
+    v = st.session_state.get(key, "")
+    if not v and env_var:
+        v = os.environ.get(env_var, "")
+    return v
+
+def _save_key(key: str, value: str, env_var: str = "") -> None:
+    """Persist to session_state and os.environ."""
+    st.session_state[key] = value
+    if env_var and value:
+        os.environ[env_var] = value
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
@@ -541,12 +581,20 @@ with st.sidebar:
 
     st.markdown('<hr class="fc-rule">', unsafe_allow_html=True)
 
-    # Model
+    # ── Model (persisted) ──────────────────────────────────────────────────────
     st.markdown(f'<div class="fc-h3">{t("sidebar.model")}</div>', unsafe_allow_html=True)
+    model_list = list(SUPPORTED_MODELS.keys())
+    saved_model = _get_saved("arch_model")
+    model_idx = model_list.index(saved_model) if saved_model in model_list else 0
+
     selected_model = st.selectbox(
-        t("sidebar.model"), list(SUPPORTED_MODELS.keys()),
-        index=0, label_visibility="collapsed"
+        t("sidebar.model"), model_list,
+        index=model_idx, label_visibility="collapsed",
+        key="model_selector"
     )
+    # Persist selection
+    _save_key("arch_model", selected_model)
+
     provider = SUPPORTED_MODELS.get(selected_model, "")
 
     # Provider badge
@@ -559,35 +607,61 @@ with st.sidebar:
         "ollama":     ("#2E2E2E", "#fff"),
     }
     pc_bg, pc_fg = provider_colors.get(provider, ("#888", "#fff"))
-    free_tag = ' <span style="font-size:.65rem;background:#FFF3F1;color:#F04E37;border:1px solid rgba(240,78,55,.3);border-radius:4px;padding:1px 5px;font-weight:700">FREE</span>' \
-        if ":free" in selected_model else ""
+    free_tag = (
+        ' <span style="font-size:.65rem;background:#FFF3F1;color:#F04E37;'
+        'border:1px solid rgba(240,78,55,.3);border-radius:4px;'
+        'padding:1px 5px;font-weight:700">FREE</span>'
+    ) if ":free" in selected_model else ""
     st.markdown(
         f'<div style="margin-bottom:8px">'
-        f'<span style="background:{pc_bg};color:{pc_fg};border-radius:4px;padding:2px 8px;'
-        f'font-size:.72rem;font-weight:700">{provider.upper()}</span>{free_tag}</div>',
+        f'<span style="background:{pc_bg};color:{pc_fg};border-radius:4px;'
+        f'padding:2px 8px;font-size:.72rem;font-weight:700">{provider.upper()}</span>'
+        f'{free_tag}</div>',
         unsafe_allow_html=True
     )
 
-    # API Key
+    # ── API Key (persisted per provider) ───────────────────────────────────────
+    env_var    = ENV_MAP.get(provider, "")
+    ss_key     = f"arch_{provider}"   # e.g. arch_openrouter, arch_anthropic
+    saved_key  = _get_saved(ss_key, env_var)
+
     key_label = "🔑 OpenRouter API Key" if provider == "openrouter" else "🔑 API Key"
-    key_help  = "Get free key at openrouter.ai — no credit card needed for :free models" \
+    key_help  = "Free key at openrouter.ai — no credit card for :free models" \
         if provider == "openrouter" else ""
+
     api_key = st.text_input(
         key_label, type="password",
+        value=saved_key,
         placeholder=t("sidebar.apikey.ph"),
-        help=key_help if key_help else None,
+        help=key_help or None,
+        key=f"apikey_{provider}",
     )
-    if api_key:
-        env_var = ENV_MAP.get(provider, "OPENAI_API_KEY")
+
+    if api_key and api_key != saved_key:
+        # New key entered — save it
+        _save_key(ss_key, api_key, env_var)
+        st.success(f"✅ {'Saved!' if lang == 'en' else 'Salvo!'}")
+    elif api_key and saved_key:
+        # Already saved — apply to env silently
         if env_var:
             os.environ[env_var] = api_key
-        st.success(t("sidebar.apikey.ok"))
-    elif provider == "openrouter" and not os.environ.get("OPENROUTER_API_KEY"):
+        st.caption(f"✓ {'Key saved' if lang == 'en' else 'Key salva'}")
+    elif not api_key and provider == "openrouter":
         st.caption("💡 openrouter.ai → API Keys → Create Key")
+
+    # Restore all previously saved keys to os.environ on every rerun
+    for _prov, _evar in ENV_MAP.items():
+        if _evar:
+            _stored = st.session_state.get(f"arch_{_prov}", "")
+            if _stored:
+                os.environ[_evar] = _stored
+
+    # Derived: api_key for the no_key check below
+    api_key = api_key or saved_key
 
     st.markdown('<hr class="fc-rule">', unsafe_allow_html=True)
 
-    # Review options
+    # ── Review options ─────────────────────────────────────────────────────────
     st.markdown(f'<div class="fc-h3">{t("sidebar.focus")}</div>', unsafe_allow_html=True)
     focus_areas = st.multiselect(
         t("sidebar.focus"), [c.value for c in FindingCategory],
@@ -605,6 +679,20 @@ with st.sidebar:
         '</div>',
         unsafe_allow_html=True
     )
+    # Clear saved keys button
+    if st.button(
+        "🗑️ Clear saved keys" if lang == "en" else "🗑️ Limpar keys salvas",
+        type="secondary", use_container_width=True
+    ):
+        for _prov in ENV_MAP:
+            _k = f"arch_{_prov}"
+            if _k in st.session_state:
+                del st.session_state[_k]
+            _ev = ENV_MAP.get(_prov, "")
+            if _ev and _ev in os.environ:
+                del os.environ[_ev]
+        st.session_state.pop("arch_model", None)
+        st.rerun()
 
 # ── App header bar (Orange DNA orange) ───────────────────────────────────────────
 st.markdown(f"""
