@@ -357,54 +357,64 @@ class Agent{{
     this.tick++; this.count=count;
     const prev=this.status; this.status=externalStatus;
 
-    // Walk towards target
-    if(this.state==='walking'||isManager&&this.visitQueue.length>0){{
-      if(isManager&&this.state!=='walking'&&this.visitQueue.length>0&&this.visitPause<=0){{
+    // ── Manager: fast delivery walk ───────────────────────────────────────────
+    if(isManager){{
+      // 17px/frame → covers avg ~250px desk distance in ~15 frames (~0.25s)
+      const MGR_SPEED=17;
+      if(this.state!=='walking'&&this.visitQueue.length>0&&this.visitPause<=0){{
         const next=this.visitQueue.shift();
         this.targetX=next.x; this.targetY=next.y; this.state='walking';
-        this._bubble('delegating',P.dR,90);
+        this._bubble('delegating',P.dR,70);
       }}
+      if(this.visitPause>0)this.visitPause--;
+      if(this.state==='walking'){{
+        const dx=this.targetX-this.x, dy=this.targetY-this.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<MGR_SPEED){{
+          this.x=this.targetX; this.y=this.targetY;
+          this.visitPause=this.visitQueue.length>0?8:0; // 8-frame tap at each desk
+          this.state='sitting';
+        }}else{{
+          this.x+=dx/dist*MGR_SPEED; this.y+=dy/dist*MGR_SPEED;
+          if(this.tick%4===0)this.frame=(this.frame+1)%4;
+        }}
+      }}
+      if(this.state==='sitting'&&externalStatus==='running'){{
+        this.state='working'; this._bubble('working',P.dR,110);
+      }}
+      if(this.state==='working'){{
+        if(this.tick%8===0)this.frame=(this.frame+1)%4;
+        if(externalStatus==='done'){{this.state='done';this._bubble('done',P.dD,220);}}
+        if(externalStatus==='error'){{this.state='error';this._bubble('error',P.dE,220);}}
+      }}
+      if(this.state==='done'&&this.tick%6===0)this.frame=(this.frame+1)%4;
+      if(this.state==='sitting'&&this.tick%this.idleMsgInterval===0)this._bubble('idle',P.dI,45);
+      if(this.bubble){{this.bubble.ttl--;if(this.bubble.ttl<=0)this.bubble=null;}}
+      return;
+    }}
+
+    // ── Specialists: walk to own seat on spawn ────────────────────────────────
+    if(this.state==='walking'){{
       const dx=this.targetX-this.x, dy=this.targetY-this.y;
       const dist=Math.sqrt(dx*dx+dy*dy);
       if(dist<this.speed){{
         this.x=this.targetX; this.y=this.targetY;
-        if(this.visitQueue.length===0){{
-          this.state=externalStatus==='running'?'working':'sitting';
-        }}else{{
-          this.visitPause=40;
-          this.state='sitting';
-        }}
+        this.state=externalStatus==='running'?'working':'sitting';
       }}else{{
         this.x+=dx/dist*this.speed; this.y+=dy/dist*this.speed;
       }}
     }}
-
-    if(this.visitPause>0)this.visitPause--;
-
-    // State transitions
     if(this.state==='sitting'&&externalStatus==='running'){{
-      this.state='working';
-      this._bubble('working',P.dR,110);
+      this.state='working'; this._bubble('working',P.dR,110);
     }}
     if(this.state==='working'){{
       if(this.tick%8===0)this.frame=(this.frame+1)%4;
-      // Random working thoughts every ~10s (staggered per agent)
       if(this.tick%160===0)this._bubble('working',P.dR,65);
-      if(externalStatus==='done'){{
-        this.state='done';
-        this._bubble('done',P.dD,220);
-      }}
-      if(externalStatus==='error'){{
-        this.state='error';
-        this._bubble('error',P.dE,220);
-      }}
+      if(externalStatus==='done'){{this.state='done';this._bubble('done',P.dD,220);}}
+      if(externalStatus==='error'){{this.state='error';this._bubble('error',P.dE,220);}}
     }}
     if(this.state==='done'&&this.tick%6===0)this.frame=(this.frame+1)%4;
-    // Idle thoughts (staggered so all agents don't talk at once)
-    if(this.state==='sitting'&&this.tick%this.idleMsgInterval===0){{
-      this._bubble('idle',P.dI,45);
-    }}
-
+    if(this.state==='sitting'&&this.tick%this.idleMsgInterval===0)this._bubble('idle',P.dI,45);
     if(this.bubble){{this.bubble.ttl--;if(this.bubble.ttl<=0)this.bubble=null;}}
   }}
 
@@ -479,11 +489,11 @@ function triggerManagerWalk(){{
   const managerEntry=agents.find(a=>a.ai===0);
   if(!managerEntry)return;
   const mgr=managerEntry.agent;
-  // Queue visits to each specialist desk (skip own desk)
+  // Visit each specialist in order (skip manager ai=0 + synthesizer ai=8)
   const visits=agents
-    .filter(a=>a.ai!==0&&a.ai!==8) // skip manager + synthesizer
+    .filter(a=>a.ai!==0&&a.ai!==8)
     .map(a=>{{return{{x:a.seatX,y:a.seatY}}}});
-  // Return to own seat last
+  // Return home after all desks
   visits.push({{x:managerEntry.seatX,y:managerEntry.seatY}});
   mgr.visitQueue.push(...visits);
 }}
@@ -548,12 +558,13 @@ function loop(t){{
     ctx.textAlign='center';ctx.fillText(lbl,cx+cw/2,cy+ch-4);ctx.textAlign='left';
   }});
 
-  // ── PASS 2: draw ALL characters on top of ALL cells ───────────────────────
-  // This guarantees the Manager (and any walking agent) is never buried
-  // under another cell's background when crossing cell boundaries.
-  agents.forEach(({{agent}})=>{{
-    agent.draw(ctx,t);
-  }});
+  // ── PASS 2: draw ALL characters — specialists first, Manager LAST ─────────
+  // Manager is drawn last so he always renders on top of every other agent
+  // when walking through their cells.
+  const nonMgr = agents.filter(a=>a.ai!==0);
+  const mgrEntry = agents.find(a=>a.ai===0);
+  nonMgr.forEach(({{agent}})=>agent.draw(ctx,t));
+  if(mgrEntry) mgrEntry.agent.draw(ctx,t);
 
   rafId=requestAnimationFrame(loop);
 }}
