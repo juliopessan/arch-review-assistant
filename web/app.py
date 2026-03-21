@@ -708,11 +708,13 @@ st.markdown(f"""
 # ── Hero ───────────────────────────────────────────────────────────────────────
 lang_val = st.session_state.get("lang", "en")
 hero_sub = (
-    "7 specialized agents — Security, Reliability, Cost, Observability, "
-    "Scalability, Performance, Maintainability — running in parallel, learning from every review."
+    "9 agents total — Manager, 7 specialists (Security, Reliability, Cost, "
+    "Observability, Scalability, Performance, Maintainability) and Synthesizer — "
+    "running in parallel, learning from every review."
     if lang_val == "en" else
-    "7 agentes especializados — Segurança, Confiabilidade, Custo, Observabilidade, "
-    "Escalabilidade, Performance, Manutenibilidade — rodando em paralelo, aprendendo a cada revisão."
+    "9 agentes no total — Manager, 7 especialistas (Segurança, Confiabilidade, Custo, "
+    "Observabilidade, Escalabilidade, Performance, Manutenibilidade) e Sintetizador — "
+    "rodando em paralelo, aprendendo a cada revisão."
 )
 st.markdown(f"""
 <div class="fc-hero">

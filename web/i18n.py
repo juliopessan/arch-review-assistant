@@ -6,8 +6,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
     # ── App meta ──────────────────────────────────────────────────────────────
     "app.title":        {"en": "Architecture Review Assistant",  "pt": "Assistente de Revisão de Arquitetura"},
-    "app.subtitle":     {"en": "**4 specialized AI agents** — Security, Reliability, Cost, Observability — run in parallel and learn from every review.",
-                         "pt": "**4 agentes de IA especializados** — Segurança, Confiabilidade, Custo, Observabilidade — rodam em paralelo e aprendem com cada revisão."},
+    "app.subtitle":     {"en": "**9 agents total** — Manager · Security · Reliability · Cost · Observability · Scalability · Performance · Maintainability · Synthesizer — run in parallel and learn from every review.",
+                         "pt": "**9 agentes no total** — Manager · Segurança · Confiabilidade · Custo · Observabilidade · Escalabilidade · Performance · Manutenibilidade · Sintetizador — rodam em paralelo e aprendem a cada revisão."},
     "app.badge":        {"en": "✦ Multi-Agent · Self-Evolving · Open Source", "pt": "✦ Multi-Agente · Auto-Evolutivo · Open Source"},
 
     # ── Sidebar ───────────────────────────────────────────────────────────────

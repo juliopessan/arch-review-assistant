@@ -4,7 +4,7 @@
 
 ### AI-Powered Architecture Review Assistant
 
-**7 specialized agents · parallel execution · self-evolving memory · PDF/image upload with OCR**
+**9 agents total · 7 specialists · parallel execution · self-evolving memory · PDF/image upload with OCR**
 
 [![CI](https://github.com/juliopessan/arch-review-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/juliopessan/arch-review-assistant/actions)
 [![Security](https://github.com/juliopessan/arch-review-assistant/actions/workflows/security.yml/badge.svg)](https://github.com/juliopessan/arch-review-assistant/actions)
@@ -20,7 +20,7 @@
 
 ## What is arch-review?
 
-**arch-review** submits your architecture to a squad of **7 specialized AI agents** that run in **parallel** — each an expert in a different dimension. They find what a single LLM call misses.
+**arch-review** submits your architecture to a squad of **9 agents** (Manager + 7 specialists + Synthesizer) that run in **parallel** — each an expert in a different dimension. They find what a single LLM call misses.
 
 Paste a description, upload a PDF or diagram image, and get back:
 
