@@ -397,7 +397,14 @@ small, .caption { color: #666 !important; -webkit-text-fill-color: #666 !importa
 # ── Constants ──────────────────────────────────────────────────────────────────
 SEV_CSS  = {Severity.CRITICAL:"critical",Severity.HIGH:"high",Severity.MEDIUM:"medium",Severity.LOW:"low",Severity.INFO:"info"}
 SEV_PILL = {Severity.CRITICAL:"pill-critical",Severity.HIGH:"pill-high",Severity.MEDIUM:"pill-medium",Severity.LOW:"pill-low",Severity.INFO:"pill-info"}
-ENV_MAP  = {"anthropic":"ANTHROPIC_API_KEY","openai":"OPENAI_API_KEY","google":"GEMINI_API_KEY","mistral":"MISTRAL_API_KEY"}
+ENV_MAP  = {
+    "anthropic":  "ANTHROPIC_API_KEY",
+    "openai":     "OPENAI_API_KEY",
+    "google":     "GEMINI_API_KEY",
+    "mistral":    "MISTRAL_API_KEY",
+    "ollama":     "",                   # no key needed
+    "openrouter": "OPENROUTER_API_KEY",
+}
 
 EXAMPLE = """# E-commerce Order Processing System
 
@@ -541,16 +548,42 @@ with st.sidebar:
         index=0, label_visibility="collapsed"
     )
     provider = SUPPORTED_MODELS.get(selected_model, "")
-    st.caption(f"{t('sidebar.provider')} `{provider}`")
+
+    # Provider badge
+    provider_colors = {
+        "anthropic":  ("#F04E37", "#fff"),
+        "openai":     ("#10a37f", "#fff"),
+        "google":     ("#4285f4", "#fff"),
+        "mistral":    ("#ff7000", "#fff"),
+        "openrouter": ("#6366f1", "#fff"),
+        "ollama":     ("#2E2E2E", "#fff"),
+    }
+    pc_bg, pc_fg = provider_colors.get(provider, ("#888", "#fff"))
+    free_tag = ' <span style="font-size:.65rem;background:#FFF3F1;color:#F04E37;border:1px solid rgba(240,78,55,.3);border-radius:4px;padding:1px 5px;font-weight:700">FREE</span>' \
+        if ":free" in selected_model else ""
+    st.markdown(
+        f'<div style="margin-bottom:8px">'
+        f'<span style="background:{pc_bg};color:{pc_fg};border-radius:4px;padding:2px 8px;'
+        f'font-size:.72rem;font-weight:700">{provider.upper()}</span>{free_tag}</div>',
+        unsafe_allow_html=True
+    )
 
     # API Key
+    key_label = "🔑 OpenRouter API Key" if provider == "openrouter" else "🔑 API Key"
+    key_help  = "Get free key at openrouter.ai — no credit card needed for :free models" \
+        if provider == "openrouter" else ""
     api_key = st.text_input(
-        "🔑 API Key", type="password",
-        placeholder=t("sidebar.apikey.ph")
+        key_label, type="password",
+        placeholder=t("sidebar.apikey.ph"),
+        help=key_help if key_help else None,
     )
     if api_key:
-        os.environ[ENV_MAP.get(provider, "OPENAI_API_KEY")] = api_key
+        env_var = ENV_MAP.get(provider, "OPENAI_API_KEY")
+        if env_var:
+            os.environ[env_var] = api_key
         st.success(t("sidebar.apikey.ok"))
+    elif provider == "openrouter" and not os.environ.get("OPENROUTER_API_KEY"):
+        st.caption("💡 openrouter.ai → API Keys → Create Key")
 
     st.markdown('<hr class="fc-rule">', unsafe_allow_html=True)
 

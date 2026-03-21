@@ -27,21 +27,30 @@ litellm.suppress_debug_info = True
 DEFAULT_MODEL = "claude-sonnet-4-20250514"
 
 SUPPORTED_MODELS = {
-    # Anthropic
-    "claude-sonnet-4-20250514": "anthropic",
-    "claude-opus-4-20250514": "anthropic",
+    # ── Anthropic ──────────────────────────────────────────────────────────────
+    "claude-sonnet-4-20250514":  "anthropic",
+    "claude-opus-4-20250514":    "anthropic",
     "claude-haiku-4-5-20251001": "anthropic",
-    # OpenAI
-    "gpt-4o": "openai",
+    # ── OpenAI ─────────────────────────────────────────────────────────────────
+    "gpt-4o":      "openai",
     "gpt-4o-mini": "openai",
-    # Google
-    "gemini/gemini-1.5-pro": "google",
+    # ── Google ─────────────────────────────────────────────────────────────────
+    "gemini/gemini-1.5-pro":   "google",
     "gemini/gemini-1.5-flash": "google",
-    # Mistral
+    # ── Mistral ────────────────────────────────────────────────────────────────
     "mistral/mistral-large-latest": "mistral",
-    # Ollama (local)
-    "ollama/llama3": "ollama",
-    "ollama/mistral": "ollama",
+    # ── Ollama (local) ─────────────────────────────────────────────────────────
+    "ollama/llama3":   "ollama",
+    "ollama/mistral":  "ollama",
+    # ── OpenRouter — Chinese models (free) ────────────────────────────────────
+    # Best for agentic tasks / architecture reasoning
+    "openrouter/deepseek/deepseek-chat-v3-0324:free":  "openrouter",  # DeepSeek V3 — SOTA reasoning, 128K
+    "openrouter/deepseek/deepseek-r1-zero:free":       "openrouter",  # DeepSeek R1 — deep reasoning chain
+    "openrouter/z-ai/glm-4.5-air:free":               "openrouter",  # GLM-4.5 Air — MoE, thinking mode
+    "openrouter/stepfun/step-3.5-flash:free":         "openrouter",  # StepFun 3.5 Flash — 196B MoE, fast
+    # Best for vision / OCR (architecture diagrams)
+    "openrouter/qwen/qwen2.5-vl-3b-instruct:free":    "openrouter",  # Qwen2.5 VL — native vision + OCR
+    "openrouter/moonshotai/kimi-vl-a3b-thinking:free": "openrouter", # Kimi VL — vision + reasoning
 }
 
 
