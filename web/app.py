@@ -19,8 +19,8 @@ if _WEB not in sys.path:
 import streamlit as st
 
 st.set_page_config(
-    page_title="arch-review",
-    page_icon="🏗️",
+    page_title="Architecture Review",
+    page_icon="web/static/favicon.svg",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -564,8 +564,15 @@ def _save_key(key: str, value: str, env_var: str = "") -> None:
 with st.sidebar:
     st.markdown("""
     <div style="display:flex;align-items:center;gap:8px;padding:4px 0 12px">
-      <span style="font-size:1.2rem">🏗️</span>
-      <span style="font-weight:800;font-size:1rem;color:#2E2E2E">arch-review</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="22" height="22">
+        <polygon points="50,2 98,50 50,98 2,50" fill="#F04E37"/>
+        <polygon points="50,2 98,50 50,50" fill="#FF7A59" opacity="0.40"/>
+        <polygon points="50,2 2,50 50,50"  fill="#C03020" opacity="0.30"/>
+        <text x="50" y="57" text-anchor="middle" dominant-baseline="central"
+              font-family="Arial,sans-serif" font-size="30" font-weight="900"
+              letter-spacing="-1" fill="#FFFFFF">AR</text>
+      </svg>
+      <span style="font-weight:800;font-size:1rem;color:#2E2E2E">Architecture Review</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -673,8 +680,8 @@ with st.sidebar:
     st.markdown('<hr class="fc-rule">', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:.72rem;color:#666;line-height:1.8">'
-        '🏗️ <a href="https://github.com/juliopessan/arch-review-assistant" '
-        'style="color:#F04E37;font-weight:600">arch-review</a> · MIT<br>'
+        '<a href="https://github.com/juliopessan/arch-review-assistant" '
+        'style="color:#F04E37;font-weight:600">Architecture Review</a> · MIT<br>'
         'by <strong style="color:#2E2E2E">Orange DNA</strong>'
         '</div>',
         unsafe_allow_html=True
@@ -698,7 +705,15 @@ with st.sidebar:
 st.markdown(f"""
 <div class="fc-topbar">
   <div class="fc-topbar-brand">
-    <span class="fc-topbar-logo">🏗️ arch-review</span>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="24" height="24" style="flex-shrink:0">
+      <polygon points="50,2 98,50 50,98 2,50" fill="rgba(255,255,255,0.95)"/>
+      <polygon points="50,2 98,50 50,50" fill="rgba(255,255,255,0.15)"/>
+      <polygon points="50,2 2,50 50,50"  fill="rgba(0,0,0,0.12)"/>
+      <text x="50" y="57" text-anchor="middle" dominant-baseline="central"
+            font-family="Arial,sans-serif" font-size="30" font-weight="900"
+            letter-spacing="-1" fill="#F04E37">AR</text>
+    </svg>
+    <span class="fc-topbar-logo">Architecture Review</span>
     <span class="fc-topbar-tag">Multi-Agent AI</span>
   </div>
   <span class="fc-topbar-meta">by Orange DNA · MIT</span>
@@ -1104,10 +1119,10 @@ with tab_export:
         e1, e2 = st.columns(2)
         with e1:
             st.markdown(t("export.json_desc"))
-            st.download_button("⬇️ review.json", r.model_dump_json(indent=2), "arch-review.json","application/json", use_container_width=True)
+            st.download_button("⬇️ review.json", r.model_dump_json(indent=2), "architecture-review.json","application/json", use_container_width=True)
         with e2:
             st.markdown(t("export.md_desc"))
-            st.download_button("⬇️ review.md", _build_md(r), "arch-review.md","text/markdown", use_container_width=True)
+            st.download_button("⬇️ review.md", _build_md(r), "architecture-review.md","text/markdown", use_container_width=True)
         if "adr_result" in st.session_state:
             st.divider()
             st.markdown(t("export.adr_title"))

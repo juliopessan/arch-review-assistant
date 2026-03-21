@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Diamond base — FCamara/Orange DNA orange -->
+  <polygon points="50,2 98,50 50,98 2,50" fill="#F04E37"/>
+  <!-- Top-right triangle — lighter tint (highlight) -->
+  <polygon points="50,2 98,50 50,50"  fill="#FF7A59" opacity="0.40"/>
+  <!-- Top-left triangle — darker tint (shadow) -->
+  <polygon points="50,2 2,50  50,50"  fill="#C03020" opacity="0.30"/>
+  <!-- "AR" — white, bold, centered -->
+  <text x="50" y="57"
+        text-anchor="middle" dominant-baseline="central"
+        font-family="Arial,Helvetica,sans-serif"
+        font-size="30" font-weight="900"
+        letter-spacing="-1"
+        fill="#FFFFFF">AR</text>
+</svg>
