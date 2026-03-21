@@ -161,11 +161,17 @@ class RunMetrics(BaseModel):
         return sum(a.findings_count for a in self.agents if a.phase != "synthesizer")
 
     def roi_label(self, lang: str = "en") -> str:
-        saved = max(0.0, 600.0 - self.cost_usd)
-        ratio = saved / max(self.cost_usd, 0.001)
+        cost = self.cost_usd
+        baseline = 600.0
+        saved = max(0.0, baseline - cost)
+        if cost <= 0.0:
+            return "Free run — $600 saved vs manual review" if lang == "en" \
+                else "Execução gratuita — $600 economizados vs revisão manual"
+        ratio = saved / cost
+        ratio_str = f"{ratio/1000:.1f}k x" if ratio >= 1000 else f"{ratio:.0f}x"
         if lang == "pt":
-            return f"≈ ${saved:,.0f} economizados vs revisão manual ({ratio:.0f}x ROI)"
-        return f"≈ ${saved:,.0f} saved vs manual review ({ratio:.0f}x ROI)"
+            return f"≈ ${saved:,.0f} economizados vs revisão manual ({ratio_str} ROI)"
+        return f"≈ ${saved:,.0f} saved vs manual review ({ratio_str} ROI)"
 
 
 class ReviewResult(BaseModel):

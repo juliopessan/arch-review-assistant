@@ -1297,14 +1297,40 @@ with tab_memory:
                  f"↑{rm.tokens_in_total:,} ↓{rm.tokens_out_total:,}")
         _rt_card(r6, f"${rm.cost_usd:.4f}",        lbl_cost,   "#16a34a")
 
-        # ROI card
-        saved = max(0.0, 600.0 - rm.cost_usd)
-        ratio = int(saved / max(rm.cost_usd, 0.001))
-        roi_val = f"{ratio}x" if ratio < 9999 else "∞"
+        # ROI card — handles free models, very cheap models, and expensive models
+        cost = rm.cost_usd
+        baseline = 600.0  # senior architect $150/h × 4h
+        saved = max(0.0, baseline - cost)
+
+        if cost <= 0.0:
+            # Free model (OpenRouter :free, Ollama)
+            roi_val  = "Free 🆓"
+            roi_sub  = f'${baseline:,.0f} {"saved" if lang=="en" else "economizados"}'
+            roi_color = "#16a34a"
+        elif cost >= baseline:
+            # Cost exceeds baseline (unlikely but safe)
+            roi_val  = "<1x"
+            roi_sub  = f'${cost:.2f} {"spent" if lang=="en" else "gasto"}'
+            roi_color = "#ea580c"
+        else:
+            ratio = saved / cost
+            if ratio >= 10_000:
+                roi_val = ">10,000x"
+            elif ratio >= 1_000:
+                roi_val = f"{ratio/1000:.1f}k x"
+            elif ratio >= 100:
+                roi_val = f"{ratio:.0f}x"
+            else:
+                roi_val = f"{ratio:.1f}x"
+            roi_sub  = f'${saved:,.0f} {"saved vs $600 manual" if lang=="en" else "vs $600 manual"}'
+            roi_color = "#16a34a"
+
         r7.markdown(
-            f'<div class="stat"><div class="n" style="color:#16a34a;font-size:1.4rem">{roi_val}</div>'
+            f'<div class="stat">'
+            f'<div class="n" style="color:{roi_color};font-size:{"1.1rem" if len(roi_val)>5 else "1.4rem"}">{roi_val}</div>'
             f'<div class="l">{lbl_roi}</div>'
-            f'<div style="font-size:.65rem;color:#9ca3af;margin-top:1px">${saved:,.0f} {"saved" if lang=="en" else "economizados"}</div></div>',
+            f'<div style="font-size:.65rem;color:#9ca3af;margin-top:1px">{roi_sub}</div>'
+            f'</div>',
             unsafe_allow_html=True
         )
 
