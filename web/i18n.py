@@ -23,12 +23,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "sidebar.lang":         {"en": "🌐 Language",          "pt": "🌐 Idioma"},
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
-    "tab.review":   {"en": "✦ Review",      "pt": "✦ Revisão"},
-    "tab.squad":    {"en": "🤖 Squad",       "pt": "🤖 Squad"},
-    "tab.findings": {"en": "🔍 Findings",   "pt": "🔍 Achados"},
-    "tab.adrs":     {"en": "📄 ADRs",        "pt": "📄 ADRs"},
-    "tab.export":   {"en": "📤 Export",      "pt": "📤 Exportar"},
-    "tab.memory":   {"en": "🧠 Memory",      "pt": "🧠 Memória"},
+    "tab.review":   {"en": "🔍 Review",    "pt": "🔍 Revisão"},
+    "tab.squad":    {"en": "🤖 Squad",     "pt": "🤖 Squad"},
+    "tab.findings": {"en": "📋 Findings",  "pt": "📋 Achados"},
+    "tab.adrs":     {"en": "📄 ADRs",      "pt": "📄 ADRs"},
+    "tab.export":   {"en": "📤 Export",    "pt": "📤 Exportar"},
+    "tab.memory":   {"en": "🧠 Memory",    "pt": "🧠 Memória"},
 
     # ── Review tab ────────────────────────────────────────────────────────────
     "review.arch.title":    {"en": "#### 📝 Architecture Description",  "pt": "#### 📝 Descrição da Arquitetura"},

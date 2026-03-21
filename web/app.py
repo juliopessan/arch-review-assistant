@@ -736,12 +736,12 @@ st.markdown(f"""
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab_review, tab_squad, tab_findings, tab_adrs, tab_export, tab_memory = st.tabs([
-    f"🔍 {t('tab.review')}",
-    f"🤖 {t('tab.squad')}",
-    f"📋 {t('tab.findings')}",
-    f"📄 {t('tab.adrs')}",
-    f"📤 {t('tab.export')}",
-    f"🧠 {t('tab.memory')}",
+    t("tab.review"),
+    t("tab.squad"),
+    t("tab.findings"),
+    t("tab.adrs"),
+    t("tab.export"),
+    t("tab.memory"),
 ])
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
