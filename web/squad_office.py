@@ -268,23 +268,90 @@ const PAD=8, VPAD=28, CTOP=24;
 // Agents live in SCENE pixel coords (not cell-relative).
 // The desk seat is stored so the manager can walk to any desk.
 
-let cellLayout=[]; // computed in initScene, shared globally
+// ── Agent-specific funny think-bubbles ────────────────────────────────────────
+const BUBBLES = {{
+  manager_agent: {{
+    idle:       ['Coffee time ☕','Reading CVs...','Org chart?','Team sync?','Slack: 47 msgs'],
+    delegating: ['Your problem now!','Go get em!','I believe in you','On it! 👉','Deploy! 🚀'],
+    done:       ['Nailed it 🎯','My work here...','Easy peasy','Call me maybe?','Mic drop 🎤'],
+    error:      ['This is fine 🔥','Blame intern','Reboot? 🔄','...meeting?','LGTM? No?'],
+  }},
+  security_agent: {{
+    idle:       ['Port scanning...','sus 👀','Zero trust. Even me.','Audit log: clean','Coffee = pwd?'],
+    working:    ['SQL injection?!','JWT what?! 😱','No HTTPS?!','Rate limits pls','CVE incoming...','Credentials in ENV?!','Auth bypass?!','OWASP top 1!','This scares me','No salt?! 😰'],
+    done:       ['Patched. Maybe.','Firewall: ✅','Sleeping better','Still scared tho','Call pen-tester!'],
+    error:      ['Exploit found 💀','We are so hacked','Pwned. Literally.','Pack your bags','RUN'],
+  }},
+  reliability_agent: {{
+    idle:       ['Uptime: 99.9%?','SPOF dreams...','5 nines plz','Ping...','Pong? Hello?'],
+    working:    ['Single DB? Bold.','No failover? 😬','Circuit? Broken.','Retry storm ahead','One AZ?? WHY','No health check!','SLA: 50% lol','Domino effect 👀','It will fall...','Chaos monkey: me'],
+    done:       ['Still standing!','Resilient! ish.','SLA: restored','PagerDuty: quiet','Touch wood 🪵'],
+    error:      ['Cascading... 💥','It fell. Called it.','3am incident!','RTO: ∞','Alert! Alert!'],
+  }},
+  cost_agent: {{
+    idle:       ['Checking bill...','AWS got ya 💸','Reserved? Nope','Idle EC2s...','Budget? LOL'],
+    working:    ['$$$$ per month?!','Over-provisioned!','Data egress... 😭','No auto-scale?!','t3.large for cron?','NAT gateway tax','Orphan volumes 👻','Unused snapshots','Reserved > on-demand','Right-sizing needed'],
+    done:       ['40% cheaper now','CFO is happy 📉','Saved: $12k/mo','AWS credits used','FinOps > DevOps'],
+    error:      ['Bill too high 💀','Cloud broke','Burn rate: 🚀','AWS called us','Budget: deleted'],
+  }},
+  observability_agent: {{
+    idle:       ['tail -f /dev/null','grep -r panic .','cat logs/*.log','Grafana loading','No dashboard 😔'],
+    working:    ['No traces? 😤','Logs: raw JSON?!','Alert fatigue!','Missing metrics!','3am + no runbook','Correlation ID?','Blind spot here!','stdout only? smh','No health endpoint','Dashboard: empty'],
+    done:       ['Tracing: done!','On-call: informed','Dashboards: ✅','SLO defined!','Runbook written'],
+    error:      ['Alert storm! 🚨','On-call is asleep','Logs: /dev/null','Unknown unknowns','PagerDuty: RIP'],
+  }},
+  scalability_agent: {{
+    idle:       ['Load test? Nah','10x traffic?','Stateful... hmm','Sharding? Later.','HPA enabled?'],
+    working:    ['Single thread!','Shared state 😱','No queue? Bold.','DB writes: bottleneck','Session in RAM?!','Fan-out explosion','Sync all the way!','Connection pool: full','Vertical only? rly','No cache layer?!'],
+    done:       ['10x ready! Kinda.','Horizontal: ✅','Stateless: done','Sharded! Finally','Queue added ✅'],
+    error:      ['Thundering herd!','Connection storm','DB: on fire 🔥','Traffic 10x: down','Melted. Literally.'],
+  }},
+  performance_agent: {{
+    idle:       ['p99: unknown 🤷','N+1 is fine... no','Cache hit: 0%','Latency? vibes','Profiler needed'],
+    working:    ['N+1 query!! 😤','No cache layer!','Sync call: 3s?!','Cold start: pain','DB index? Never','Waterfall chain!','No CDN for static!','Chatty API 💬','CPU: 100% on what','Serialization: slow'],
+    done:       ['p99: 42ms ✅','Cache: 94% hit!','Lazy loaded!','Index added 🚀','Latency: tamed'],
+    error:      ['Timeout: 30s 💀','OOM: forever','CPU pegged 📈','GC storm! ☠️','Users left. Bye.'],
+  }},
+  maintainability_agent: {{
+    idle:       ['git blame... me','TODO: fix later','Tech debt = ∞','Bus factor: 1','Docs? git log'],
+    working:    ['Shared DB!! 😱','No interfaces?!','God class found','Circular deps!','Deploy: manual?!','No feature flags','Monolith in disguise','Test coverage: 4%','Friday deploys?!','12 env vars: WHAT'],
+    done:       ['Refactored! ish','ADR written ✅','Bus factor: 2!','Docs: updated 📚','CI/CD: fixed'],
+    error:      ['Prod is config.js','Tech debt won','Nobody knows this','Rollback: impossible','YOLO deploy: oops'],
+  }},
+  synthesizer_agent: {{
+    idle:       ['Connecting dots...','Pattern detected','Reading all notes','Cross-ref time!','Thinking... 🤔'],
+    working:    ['Root cause!','This explains that!','Classic anti-pattern','I see it now...','Ooh, they overlap!','Systemic issue!','The plot thickens','Risk: compounding','Good catch team!','Connecting 7 inputs'],
+    done:       ['Story: complete!','Synthesis: done ✅','TLDR: fix the DB','Final boss: defeated','Shipped! 🚢'],
+    error:      ['Mixed signals...','Contradiction found','Too much to parse','Findings: chaotic','404: conclusion'],
+  }},
+}};
+
+function getBubble(agentKey, state) {{
+  const pool = BUBBLES[agentKey];
+  if (!pool) return null;
+  const msgs = pool[state] || pool['working'] || ['...'];
+  return msgs[Math.floor(Math.random() * msgs.length)];
+}}
 
 class Agent{{
   constructor(def,seatX,seatY,cellCX,cellCY,variant){{
     this.def=def; this.variant=variant;
     this.seatX=seatX; this.seatY=seatY;
-    // Start slightly below seat, walk up to it
     this.x=seatX; this.y=seatY+40;
     this.targetX=seatX; this.targetY=seatY;
     this.state='walking';
     this.frame=0; this.tick=0; this.speed=2.2;
     this.bubble=null; this.status='idle'; this.count=0;
-    // Manager walk: queue of desks to visit
     this.visitQueue=[]; this.visitPause=0;
+    this.idleMsgInterval = 80 + Math.floor(Math.random()*80); // stagger idle bubbles
   }}
 
   walkTo(tx,ty){{this.targetX=tx;this.targetY=ty;this.state='walking';}}
+
+  _bubble(state,color,ttl){{
+    const txt=getBubble(this.def.key,state);
+    if(txt)this.bubble={{text:txt,color:color,ttl:ttl}};
+  }}
 
   update(externalStatus,count,isManager){{
     this.tick++; this.count=count;
@@ -295,7 +362,7 @@ class Agent{{
       if(isManager&&this.state!=='walking'&&this.visitQueue.length>0&&this.visitPause<=0){{
         const next=this.visitQueue.shift();
         this.targetX=next.x; this.targetY=next.y; this.state='walking';
-        this.bubble={{text:'Delegating!',color:P.dR,ttl:80}};
+        this._bubble('delegating',P.dR,90);
       }}
       const dx=this.targetX-this.x, dy=this.targetY-this.y;
       const dist=Math.sqrt(dx*dx+dy*dy);
@@ -304,7 +371,7 @@ class Agent{{
         if(this.visitQueue.length===0){{
           this.state=externalStatus==='running'?'working':'sitting';
         }}else{{
-          this.visitPause=40; // pause at each desk
+          this.visitPause=40;
           this.state='sitting';
         }}
       }}else{{
@@ -317,19 +384,26 @@ class Agent{{
     // State transitions
     if(this.state==='sitting'&&externalStatus==='running'){{
       this.state='working';
-      this.bubble={{text:'Analyzing...',color:P.dR,ttl:100}};
+      this._bubble('working',P.dR,110);
     }}
     if(this.state==='working'){{
       if(this.tick%8===0)this.frame=(this.frame+1)%4;
-      if(this.tick%160===0){{
-        const m=['...','hmm','!','🔍','?!'];
-        this.bubble={{text:m[Math.floor(Math.random()*m.length)],color:P.dR,ttl:55}};
+      // Random working thoughts every ~10s (staggered per agent)
+      if(this.tick%160===0)this._bubble('working',P.dR,65);
+      if(externalStatus==='done'){{
+        this.state='done';
+        this._bubble('done',P.dD,220);
       }}
-      if(externalStatus==='done'){{this.state='done';this.bubble={{text:'Done! ✓',color:P.dD,ttl:200}};}}
-      if(externalStatus==='error'){{this.state='error';this.bubble={{text:'Error!',color:P.dE,ttl:200}};}}
+      if(externalStatus==='error'){{
+        this.state='error';
+        this._bubble('error',P.dE,220);
+      }}
     }}
     if(this.state==='done'&&this.tick%6===0)this.frame=(this.frame+1)%4;
-    if(this.state==='sitting'&&this.tick%80===0)this.bubble={{text:'...',color:P.dI,ttl:35}};
+    // Idle thoughts (staggered so all agents don't talk at once)
+    if(this.state==='sitting'&&this.tick%this.idleMsgInterval===0){{
+      this._bubble('idle',P.dI,45);
+    }}
 
     if(this.bubble){{this.bubble.ttl--;if(this.bubble.ttl<=0)this.bubble=null;}}
   }}
