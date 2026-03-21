@@ -587,22 +587,25 @@ st.markdown(f"""
 # ── Hero ───────────────────────────────────────────────────────────────────────
 lang_val = st.session_state.get("lang", "en")
 hero_sub = (
-    "4 specialized agents — Security, Reliability, Cost, Observability — "
-    "running in parallel, learning from every review."
+    "7 specialized agents — Security, Reliability, Cost, Observability, "
+    "Scalability, Performance, Maintainability — running in parallel, learning from every review."
     if lang_val == "en" else
-    "4 agentes especializados — Segurança, Confiabilidade, Custo, Observabilidade — "
-    "rodando em paralelo, aprendendo a cada revisão."
+    "7 agentes especializados — Segurança, Confiabilidade, Custo, Observabilidade, "
+    "Escalabilidade, Performance, Manutenibilidade — rodando em paralelo, aprendendo a cada revisão."
 )
 st.markdown(f"""
 <div class="fc-hero">
   <div class="fc-hero-title">Architecture <span>Review</span></div>
   <div class="fc-hero-sub">{hero_sub}</div>
   <div class="fc-hero-badges">
-    <span class="fc-chip orange">🤖 Agent Manager</span>
+    <span class="fc-chip orange">🎯 Agent Manager</span>
     <span class="fc-chip orange">🔐 Security</span>
     <span class="fc-chip orange">🛡️ Reliability</span>
     <span class="fc-chip orange">💰 Cost</span>
     <span class="fc-chip orange">📡 Observability</span>
+    <span class="fc-chip orange">📈 Scalability</span>
+    <span class="fc-chip orange">⚡ Performance</span>
+    <span class="fc-chip orange">🔧 Maintainability</span>
     <span class="fc-chip orange">🧠 Synthesizer</span>
     <span class="fc-chip">✦ Self-Evolving Memory</span>
     <span class="fc-chip">⚡ Parallel Execution</span>
@@ -864,7 +867,7 @@ with tab_findings:
                 pc1, pc2, pc3 = st.columns(3)
                 pc1.metric("Architecture", plan.architecture_type)
                 pc2.metric("Complexity", plan.complexity.upper())
-                pc3.metric("Agents Active", f"{len(plan.active_agents)}/4")
+                pc3.metric("Agents Active", f"{len(plan.active_agents)}/7")
 
                 if plan.top_risks:
                     st.markdown("**Top risks detected before agents ran:**")
