@@ -370,7 +370,8 @@ class ReviewSquad:
         user_prompt: str,
     ) -> AgentResult:
         result = AgentResult(agent_name=agent_name)
-        t0 = asyncio.get_event_loop().time()
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
         try:
             response = await asyncio.to_thread(
                 litellm.completion,
@@ -382,7 +383,7 @@ class ReviewSquad:
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
-            result.duration_s = asyncio.get_event_loop().time() - t0
+            result.duration_s = loop.time() - t0
             # Capture token usage from response
             usage = getattr(response, "usage", None)
             if usage:
@@ -395,7 +396,7 @@ class ReviewSquad:
             result.lesson   = data.get("lesson_for_memory", "")
             result._raw_data = data  # type: ignore[attr-defined]
         except Exception as exc:
-            result.duration_s = asyncio.get_event_loop().time() - t0
+            result.duration_s = loop.time() - t0
             logger.error("Agent %s error: %s", agent_name, exc)
             result.error = str(exc)
         return result

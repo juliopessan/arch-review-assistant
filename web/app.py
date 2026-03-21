@@ -812,7 +812,10 @@ with tab_review:
                 st.rerun()
 
     st.divider()
-    no_key = not api_key and not any(os.environ.get(k) for k in ENV_MAP.values())
+    no_key = not api_key and not any(
+        os.environ.get(k, "").strip()
+        for k in ENV_MAP.values() if k
+    )
     b1, b2, b3 = st.columns([1,1,2])
     with b1:
         run_squad  = st.button(t("review.btn_squad"), type="primary",   use_container_width=True, disabled=not arch_text.strip())
@@ -940,18 +943,38 @@ with tab_squad:
 
         st.session_state["squad_running"] = False
 
-        # Show error if squad failed
-        if not st.session_state.get("review_result") and any(
-            e.get("event") == "error" for e in log
-        ):
-            err_msg = next(
-                (e.get("error", "") for e in log if e.get("event") == "error"), ""
-            )
-            st.error(f"❌ Squad failed: {err_msg}")
+        # ── Surface errors ─────────────────────────────────────────────────────
+        agent_errors = [e for e in log if e.get("event") == "error" and e.get("agent") != "squad"]
+        squad_fatal  = next((e for e in log if e.get("event") == "error" and e.get("agent") == "squad"), None)
+
+        # Fatal squad-level error (no result produced at all)
+        if squad_fatal and not st.session_state.get("review_result"):
+            st.error(f"❌ Squad failed: {squad_fatal.get('error', '')}")
             if error_detail:
                 with st.expander("🔍 Error details"):
                     st.code(error_detail, language="text")
             st.stop()
+
+        # Per-agent errors (squad produced a result but some agents failed)
+        if agent_errors:
+            err_label = "agent(s) failed" if lang == "en" else "agente(s) falharam"
+            names = ", ".join(e.get("agent", "?").replace("_agent", "") for e in agent_errors)
+            with st.expander(f"⚠️ {len(agent_errors)} {err_label}: {names}", expanded=False):
+                for e in agent_errors:
+                    agent_nm = e.get("agent", "?")
+                    msg = e.get("error", "unknown error")
+                    # Classify common errors for clearer messaging
+                    if "authentication" in msg.lower() or "api_key" in msg.lower() or "invalid x-api-key" in msg.lower():
+                        tip = "🔑 Invalid or missing API key" if lang == "en" else "🔑 Chave de API inválida ou ausente"
+                    elif "rate_limit" in msg.lower() or "429" in msg:
+                        tip = "⏱️ Rate limit hit — retry later" if lang == "en" else "⏱️ Rate limit atingido — tente novamente"
+                    elif "model_not_found" in msg.lower() or "404" in msg:
+                        tip = "🤖 Model not found or not available" if lang == "en" else "🤖 Modelo não encontrado ou indisponível"
+                    elif "timeout" in msg.lower():
+                        tip = "⏰ Request timed out" if lang == "en" else "⏰ Requisição expirou"
+                    else:
+                        tip = msg[:120]
+                    st.markdown(f"**{agent_nm}** — {tip}")
 
         if gen_adrs and "review_result" in st.session_state:
             with st.spinner(rand_msg(msgs["adr"])):
