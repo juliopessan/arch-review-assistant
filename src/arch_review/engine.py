@@ -35,8 +35,11 @@ SUPPORTED_MODELS = {
     "gpt-4o":      "openai",
     "gpt-4o-mini": "openai",
     # ── Google ─────────────────────────────────────────────────────────────────
-    "gemini/gemini-1.5-pro":   "google",
-    "gemini/gemini-1.5-flash": "google",
+    "gemini/gemini-3.1-pro-preview":   "google",  # Flagship — Gemini 3.1 Pro (latest, Mar 2026)
+    "gemini/gemini-3.1-flash-preview": "google",  # Fast — Gemini 3.1 Flash (frontier-class, Mar 2026)
+    "gemini/gemini-2.5-pro":           "google",  # Stable — best price/performance, deep reasoning
+    "gemini/gemini-2.5-flash":         "google",  # Stable — best price/perf for high-volume tasks
+    "gemini/gemini-2.5-flash-lite":    "google",  # Lite — lowest cost, high-volume workhorse
     # ── Mistral ────────────────────────────────────────────────────────────────
     "mistral/mistral-large-latest": "mistral",
     # ── Ollama (local) ─────────────────────────────────────────────────────────
