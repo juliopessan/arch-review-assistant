@@ -509,6 +509,7 @@ function loop(t){{
   }}
   if(!mgrRunning&&(STATES['manager_agent']||{{}}).status==='idle')managerWalkTriggered=false;
 
+  // ── PASS 1: update state + draw cell bg, desk, name card, status label ────
   agents.forEach(({{agent,ai,cx,cy,cw,ch,deskCX,deskCY}})=>{{
     const sd=STATES[agent.def.key]||{{status:'idle',count:0}};
     const status=sd.status||'idle';
@@ -516,9 +517,10 @@ function loop(t){{
     const isRun=status==='running',isDone=status==='done',isErr=status==='error';
     const isManager=ai===0;
 
+    // Always update state (must happen every frame)
     agent.update(status,count,isManager);
 
-    // Cell bg
+    // Cell background
     const bg=isRun?0x1a1838:isDone?0x0a2010:isErr?0x200808:0x16122a;
     const bc=isRun?0x818cf8:isDone?0x22c55e:isErr?0xf87171:0x3d3560;
     rr(ctx,cx,cy,cw,ch,6,bg,0.88);
@@ -531,13 +533,10 @@ function loop(t){{
       ctx.fillStyle=hx(0x818cf8);ctx.beginPath();ctx.roundRect(cx,cy,cw,ch,6);ctx.fill();ctx.restore();
     }}
 
-    // Desk (upper portion of cell)
+    // Desk (upper portion of cell, always inside own cell)
     const deskDrawX=cx+cw/2-DW/2;
     const deskDrawY=cy+ch*0.08;
     drawDesk(ctx,deskDrawX,deskDrawY,isRun||isDone,ai);
-
-    // Character (drawn in scene coords — no extra transform)
-    agent.draw(ctx,t);
 
     // Name card (above cell top)
     drawCard(ctx,cx,cy,cw,agent.def,status,count);
@@ -547,6 +546,13 @@ function loop(t){{
     ctx.font='7px sans-serif';
     ctx.fillStyle=hx(isRun?0x818cf8:isDone?0x22c55e:isErr?0xf87171:0x3d3560);
     ctx.textAlign='center';ctx.fillText(lbl,cx+cw/2,cy+ch-4);ctx.textAlign='left';
+  }});
+
+  // ── PASS 2: draw ALL characters on top of ALL cells ───────────────────────
+  // This guarantees the Manager (and any walking agent) is never buried
+  // under another cell's background when crossing cell boundaries.
+  agents.forEach(({{agent}})=>{{
+    agent.draw(ctx,t);
   }});
 
   rafId=requestAnimationFrame(loop);
