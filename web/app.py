@@ -62,8 +62,8 @@ def esc(text: str) -> str:
     return html.escape(str(text), quote=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CSS — FCamara Design System
-#  Skill: fcamara-style-guide
+#  CSS — Orange DNA Design System
+#  Skill: orange-dna-style-guide
 #  Palette:
 #    #F04E37  primary orange      → buttons, active tabs, accents, badges
 #    #2E2E2E  dark grey           → all body text / headings
@@ -91,7 +91,7 @@ html, body, [class*="css"] {
 }
 #MainMenu, footer, [data-testid="stDecoration"] { display: none !important; }
 
-/* ── FCamara app header bar ───────────────────────────────────────────────── */
+/* ── Orange DNA app header bar ───────────────────────────────────────────────── */
 .fc-topbar {
   background: #F04E37;
   margin: -1rem -2rem 0; padding: 12px 2rem 10px;
@@ -204,7 +204,7 @@ html, body, [class*="css"] {
 .stButton > button[kind="secondary"]:hover { background: #FFF3F1 !important; }
 
 /* ── Inputs ───────────────────────────────────────────────────────────────── */
-/* All input text — FCamara widget rule: always hardcode, never inherit */
+/* All input text — Orange DNA widget rule: always hardcode, never inherit */
 input, select {
   color: #2E2E2E !important; -webkit-text-fill-color: #2E2E2E !important;
   background: #fff !important;
@@ -317,7 +317,7 @@ label {
   padding: 2px 10px; font-size: .69rem; font-weight: 700;
 }
 
-/* ── Section headings (H2 left bar — FCamara spec) ────────────────────────── */
+/* ── Section headings (H2 left bar — Orange DNA spec) ────────────────────────── */
 .fc-h2 {
   font-size: 1.05rem; font-weight: 700; color: #2E2E2E;
   border-left: 4px solid #F04E37; padding-left: 12px;
@@ -329,7 +329,7 @@ label {
   margin: 16px 0 8px;
 }
 
-/* ── Section rule (FCamara orange divider) ────────────────────────────────── */
+/* ── Section rule (Orange DNA orange divider) ────────────────────────────────── */
 .fc-rule { border: none; border-top: 2px solid #F04E37; opacity: .25; margin: 1.2rem 0; }
 
 /* ── Metrics (native Streamlit) ───────────────────────────────────────────── */
@@ -361,7 +361,7 @@ label {
 [data-testid="stAlert"] {
   border-radius: 10px !important; border-left-width: 4px !important;
 }
-/* Success → FCamara orange tint */
+/* Success → Orange DNA orange tint */
 [data-testid="stAlert"][kind="success"] {
   background: #FFF3F1 !important; border-color: #F04E37 !important;
 }
@@ -568,19 +568,19 @@ with st.sidebar:
         '<div style="font-size:.72rem;color:#666;line-height:1.8">'
         '🏗️ <a href="https://github.com/juliopessan/arch-review-assistant" '
         'style="color:#F04E37;font-weight:600">arch-review</a> · MIT<br>'
-        'by <strong style="color:#2E2E2E">FCamara</strong>'
+        'by <strong style="color:#2E2E2E">Orange DNA</strong>'
         '</div>',
         unsafe_allow_html=True
     )
 
-# ── App header bar (FCamara orange) ───────────────────────────────────────────
+# ── App header bar (Orange DNA orange) ───────────────────────────────────────────
 st.markdown(f"""
 <div class="fc-topbar">
   <div class="fc-topbar-brand">
     <span class="fc-topbar-logo">🏗️ arch-review</span>
     <span class="fc-topbar-tag">Multi-Agent AI</span>
   </div>
-  <span class="fc-topbar-meta">by FCamara · MIT</span>
+  <span class="fc-topbar-meta">by Orange DNA · MIT</span>
 </div>
 """, unsafe_allow_html=True)
 

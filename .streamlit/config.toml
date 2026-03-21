@@ -1,9 +1,9 @@
 [theme]
-# FCamara Brand Colors (fcamara-style-guide skill)
-primaryColor             = "#F04E37"   # FCamara orange
+# Orange DNA Brand Colors (orange-dna-style-guide skill)
+primaryColor             = "#F04E37"   # Orange DNA orange
 backgroundColor          = "#FFFFFF"   # clean white canvas
-secondaryBackgroundColor = "#FFF3F1"   # FCamara orange tint (sidebar, inputs)
-textColor                = "#2E2E2E"   # FCamara dark grey
+secondaryBackgroundColor = "#FFF3F1"   # Orange DNA orange tint (sidebar, inputs)
+textColor                = "#2E2E2E"   # Orange DNA dark grey
 
 # Typography — closest system equivalent to Arial
 font = "sans serif"
