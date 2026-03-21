@@ -18,9 +18,18 @@ if _WEB not in sys.path:
 
 import streamlit as st
 
+_FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <polygon points="50,2 98,50 50,98 2,50" fill="#F04E37"/>
+  <polygon points="50,2 98,50 50,50" fill="#FF7A59" opacity="0.40"/>
+  <polygon points="50,2 2,50 50,50"  fill="#C03020" opacity="0.30"/>
+  <text x="50" y="57" text-anchor="middle" dominant-baseline="central"
+        font-family="Arial,Helvetica,sans-serif"
+        font-size="30" font-weight="900" letter-spacing="-1" fill="#FFFFFF">AR</text>
+</svg>"""
+
 st.set_page_config(
     page_title="Architecture Review",
-    page_icon="web/static/favicon.svg",
+    page_icon=_FAVICON_SVG,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
