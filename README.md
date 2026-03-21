@@ -37,34 +37,30 @@ No boilerplate. No generic advice. Every finding is specific to *your* architect
 ## The Squad (9 agents total)
 
 ```
-                    ┌──────────────────┐
-                    │  🎯 Agent Manager │  Phase 0 — analyzes architecture,
-                    │                  │  sets priorities, injects focus per agent
-                    └────────┬─────────┘
-                             │ delegates (walks desk-to-desk)
-         ┌───────────────────┼──────────────────────────────────┐
-         │                   │                  │               │
-┌────────▼───────┐  ┌────────▼───────┐  ┌──────▼──────┐  ┌────▼──────────────┐
-│ 🔐 Security    │  │ 🛡️ Reliability  │  │ 💰 Cost     │  │ 📡 Observability  │
-│ Auth · Secrets │  │ SPOFs · Resil.  │  │ FinOps      │  │ Logs · Traces     │
-│ Compliance     │  │ Failover · RTO  │  │ Sizing      │  │ Alerts · SLOs     │
-└────────────────┘  └─────────────────┘  └─────────────┘  └───────────────────┘
-
-┌────────────────────┐  ┌──────────────────────┐  ┌────────────────────────────┐
-│ 📈 Scalability     │  │ ⚡ Performance         │  │ 🔧 Maintainability         │
-│ Bottlenecks        │  │ N+1 · Caching         │  │ Coupling · Tech debt       │
-│ Stateless · Queue  │  │ Latency · CDN         │  │ Testability · Deploys      │
-└────────────────────┘  └──────────────────────┘  └────────────────────────────┘
-                                    │ all parallel
-                           ┌────────▼────────┐
-                           │  🧠 Synthesizer  │  Deduplicates, finds root causes,
-                           │                 │  re-prioritizes by business impact
-                           └────────┬────────┘
-                                    │
-                           ┌────────▼────────┐
-                           │  ReviewResult   │
-                           │  + ADRs + Runs  │
-                           └─────────────────┘
+                         ┌──────────────────┐
+                         │  🎯 Agent Manager │  Phase 0 — analyzes architecture,
+                         │                  │  sets priorities, injects focus
+                         └────────┬─────────┘
+                                  │ delegates (walks desk-to-desk)
+       ┌──────────┬───────────────┼───────────────┬──────────┬──────────┬──────────┐
+       │          │               │               │          │          │          │
+┌──────▼──────┐ ┌─▼────────────┐ ┌▼──────────┐ ┌─▼──────────────┐ ┌───▼──────┐ ┌─▼────────────┐ ┌─▼──────────────────┐
+│ 🔐 Security │ │ 🛡️ Reliability│ │ 💰 Cost   │ │ 📡 Observability│ │📈 Scalab.│ │ ⚡ Performance│ │ 🔧 Maintainability  │
+│ Auth        │ │ SPOFs        │ │ FinOps    │ │ Logs · Traces  │ │Bottleneck│ │ N+1 · Cache  │ │ Coupling · Debt     │
+│ Secrets     │ │ Resilience   │ │ Sizing    │ │ Alerts · SLOs  │ │Stateless │ │ Latency · CDN│ │ Testability         │
+│ Compliance  │ │ Failover     │ │ Transfer  │ │ Runbooks       │ │Queues    │ │ Critical path│ │ Deploy complexity   │
+└──────┬──────┘ └──────┬───────┘ └────┬──────┘ └───────┬────────┘ └────┬─────┘ └──────┬───────┘ └──────┬─────────────┘
+       └────────────────┴─────────────┴────────────────┴───────────────┴──────────────┴────────────────┘
+                                                         │ all 7 run in parallel
+                                                ┌────────▼────────┐
+                                                │  🧠 Synthesizer  │  Deduplicates · root causes
+                                                │                 │  re-prioritizes by impact
+                                                └────────┬────────┘
+                                                         │
+                                                ┌────────▼────────┐
+                                                │  ReviewResult   │
+                                                │  + ADRs + Runs  │
+                                                └─────────────────┘
 ```
 
 The **Agent Manager** (Phase 0) uses smart activation rules — it disables `cost_agent` for on-prem/air-gapped systems, `performance_agent` for non-user-facing batch jobs, etc. — so every review is lean and relevant to the architecture at hand.
