@@ -152,7 +152,8 @@ streamlit run web/app.py
 A **pixel-art animated canvas** where each of the 9 agents is a character at a desk:
 
 - **State machine**: `idle → walk → sit → working → done / error`
-- **Agent Manager walks desk-to-desk** delivering tasks before returning to his seat
+- **Agent Manager walks desk-to-desk** at high speed (17px/frame ≈ 0.38s/desk), synchronized with real LLM agent start events. Total walk: ~2.7s for all 7 desks
+- **2-pass rendering**: all cell backgrounds drawn first (Pass 1), all characters on top (Pass 2) — Manager never hidden behind other cells when crossing boundaries
 - **Think-bubbles** with 25 domain-specific funny messages per agent:
 
 | Agent | Example bubbles |
@@ -171,6 +172,14 @@ A **pixel-art animated canvas** where each of the 9 agents is a character at a d
 - **Sparkle particles** on completion state
 - **4-row layout**: Manager → 4 specialists → 3 new agents → Synthesizer
 - **Auto-height**: ResizeObserver reports actual canvas height to Streamlit iframe
+- **Diamond AR favicon**: SVG logo (Orange DNA palette `#F04E37`) shown in browser tab
+
+### Error Handling
+
+When agents fail individually (wrong API key, rate limit, model unavailable), the squad continues with the remaining agents and shows a collapsible expander with:
+- Which agents failed by name
+- Automatic error classification: 🔑 API key · ⏱️ Rate limit · 🤖 Model not found · ⏰ Timeout
+- Fatal squad errors (no result produced) surface with full traceback
 
 ### Run Time Section (Memory tab)
 
@@ -184,7 +193,7 @@ After every squad review:
 | Synthesizer | Final synthesis duration |
 | Tokens Used | Input + output per agent |
 | Est. Cost | Dynamic — priced to the selected model |
-| ROI | Savings vs. $600 manual review baseline |
+| ROI | Smart display: `>10,000x` / `239x` / `Free 🆓` / `<1x` — never `∞` |
 
 Cost is calculated using a model pricing table matched by substring — `gemini-2.5-flash` at $0.30/M, OpenRouter `:free` models at $0.00, etc.
 
@@ -407,6 +416,12 @@ arch-review-assistant/
 - [x] Persistent API key storage per session
 - [x] Orange DNA design system
 - [x] Agent-specific think-bubbles (funny, 25 msgs per agent)
+- [x] Diamond AR favicon (SVG inline string, Orange DNA `#F04E37`)
+- [x] Manager z-order fix — always rendered on top (2-pass render)
+- [x] Manager fast synchronized walk (17px/frame, ~2.7s total for 7 desks)
+- [x] Per-agent error surfacing with classification (API key / rate limit / timeout)
+- [x] ROI card smart display — `>10,000x` / `Free 🆓` / `<1x` (no more `∞`)
+- [x] Python 3.12 — `asyncio.get_running_loop()` replacing deprecated `get_event_loop()`
 - [x] Docker + Railway/Render deploy
 - [x] GitHub Actions CI + Security scanning
 - [ ] `arch-review diff` — compare two architecture versions
