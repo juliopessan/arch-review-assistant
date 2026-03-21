@@ -61,70 +61,336 @@ sudo apt-get install tesseract-ocr
 def esc(text: str) -> str:
     return html.escape(str(text), quote=True)
 
-# ── CSS ────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+#  CSS — FCamara Design System
+#  Skill: fcamara-style-guide
+#  Palette:
+#    #F04E37  primary orange      → buttons, active tabs, accents, badges
+#    #2E2E2E  dark grey           → all body text / headings
+#    #FF7A59  soft orange         → highlights, hover states
+#    #FFF3F1  orange tint         → card backgrounds, sidebar, tinted fields
+#    #FFE5DF  warm tint           → critical/warning backgrounds
+#    #E0E0E0  neutral grey        → borders, dividers
+#    #666666  muted               → captions, meta, labels
+#    #F5F5F5  row alt             → alternating rows
+#  Typography: Inter (web) / Arial (fallback) — weights 400/600/700/800
+# ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Inter', system-ui, sans-serif !important; }
-.main .block-container { max-width: 1100px !important; padding: 2rem 2rem 4rem !important; }
-#MainMenu, footer { display: none !important; }
-h1 { font-size: 2.2rem !important; font-weight: 700 !important; letter-spacing: -.03em !important; margin-bottom: .25rem !important; }
-h2 { font-size: 1.3rem !important; font-weight: 600 !important; margin: 1.5rem 0 .75rem !important; }
-.badge { display: inline-flex; align-items: center; gap: 6px; background: #f0f0ff; border: 1px solid #c7d2fe; color: #4338ca; border-radius: 999px; padding: 4px 14px; font-size: .75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 1rem; }
-.scard { border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; border: 1px solid #e5e7eb; background: #fff; }
-.scard.critical { border-left: 4px solid #dc2626; background: #fff7f7; }
-.scard.high     { border-left: 4px solid #ea580c; background: #fff8f5; }
-.scard.medium   { border-left: 4px solid #ca8a04; background: #fffdf0; }
-.scard.low      { border-left: 4px solid #2563eb; background: #f5f8ff; }
-.scard.info     { border-left: 4px solid #6b7280; background: #f9fafb; }
-.scard-title  { font-weight: 700; font-size: .97rem; color: #111; margin-bottom: 4px; }
-.scard-meta   { font-size: .72rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #9ca3af; margin-bottom: 10px; }
-.scard-desc   { font-size: .87rem; color: #374151; line-height: 1.6; margin-bottom: 10px; }
-.scard-rec    { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 9px 13px; font-size: .84rem; color: #166534; margin-bottom: 6px; }
-.scard-affects{ font-size: .78rem; color: #4f46e5; margin-bottom: 6px; }
-.scard-q      { font-size: .78rem; color: #6b7280; font-style: italic; margin-top: 6px; }
-.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
-.pill-critical { background: #fee2e2; color: #b91c1c; }
-.pill-high     { background: #ffedd5; color: #c2410c; }
-.pill-medium   { background: #fef9c3; color: #a16207; }
-.pill-low      { background: #dbeafe; color: #1d4ed8; }
-.pill-info     { background: #f3f4f6; color: #6b7280; }
-.statrow { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
-.stat { flex: 1; min-width: 80px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-.stat .n { font-size: 1.9rem; font-weight: 800; line-height: 1; }
-.stat .l { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #9ca3af; margin-top: 3px; }
-.stat-c .n{color:#dc2626} .stat-h .n{color:#ea580c} .stat-m .n{color:#ca8a04} .stat-l .n{color:#2563eb} .stat-i .n{color:#9ca3af} .stat-t .n{color:#4f46e5}
-.agentcard { flex: 1; background: #fff; border: 1.5px solid #e5e7eb; border-radius: 14px; padding: 16px 12px; text-align: center; transition: all .25s ease; }
-.agentcard.idle    { opacity: .45; }
-.agentcard.running { border-color: #6366f1; background: #f5f3ff; box-shadow: 0 0 0 3px rgba(99,102,241,.1); }
-.agentcard.done    { border-color: #16a34a; background: #f0fdf4; }
-.agentcard.error   { border-color: #dc2626; background: #fef2f2; }
-.agentcard .ic { font-size: 1.6rem; margin-bottom: 6px; }
-.agentcard .nm { font-size: .82rem; font-weight: 700; color: #111; }
-.agentcard .ds { font-size: .68rem; color: #9ca3af; margin-top: 2px; line-height: 1.4; }
-.agentcard .st { font-size: .72rem; color: #6b7280; margin-top: 5px; }
-.agentcard .ct { font-size: .75rem; font-weight: 700; color: #4f46e5; margin-top: 3px; }
-.arrow { font-size: 1.1rem; color: #d1d5db; padding-top: 22px; }
-.memcard { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 10px; text-align: center; }
-.memcard.live { border-color: #16a34a; background: #f0fdf4; }
-.memcard .ic { font-size: 1.3rem; }
-.memcard .nm { font-size: .78rem; font-weight: 700; color: #111; margin-top: 4px; }
-.memcard .sz { font-size: .68rem; color: #9ca3af; }
-.memcard .ls { font-size: .72rem; font-weight: 700; color: #4f46e5; margin-top: 2px; }
-.adrcard { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 20px; margin-bottom: 10px; }
-.adrnum   { font-size: .72rem; font-weight: 700; color: #4f46e5; letter-spacing: .07em; text-transform: uppercase; }
-.adrtitle { font-size: 1rem; font-weight: 700; color: #111; margin: 4px 0; }
-.adrstatus{ display: inline-block; background: #eff6ff; color: #1d4ed8; border-radius: 999px; padding: 2px 10px; font-size: .7rem; font-weight: 700; }
-[data-testid="stFileUploaderDropzone"] { border-radius: 12px !important; border: 1.5px dashed #c7d2fe !important; background: #fafbff !important; }
-.stTextArea textarea { font-family: 'JetBrains Mono','Fira Code',monospace !important; font-size: .82rem !important; border-radius: 10px !important; border: 1.5px solid #e5e7eb !important; }
-.stTextArea textarea:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,.1) !important; }
-.stButton > button { border-radius: 10px !important; font-weight: 600 !important; font-size: .88rem !important; transition: all .15s !important; }
-.stTabs [data-baseweb="tab-list"] { gap: 4px !important; border-bottom: 2px solid #f3f4f6 !important; }
-.stTabs [data-baseweb="tab"] { border-radius: 8px 8px 0 0 !important; font-size: .85rem !important; font-weight: 500 !important; padding: 8px 16px !important; color: #6b7280 !important; }
-.stTabs [aria-selected="true"] { color: #4f46e5 !important; background: #f5f3ff !important; border-bottom: 2px solid #4f46e5 !important; }
-hr { border: none !important; border-top: 1px solid #f3f4f6 !important; margin: 1.5rem 0 !important; }
-code { background: #f5f3ff !important; color: #4338ca !important; border-radius: 4px !important; padding: 1px 5px !important; }
-[data-testid="stExpander"] { border: 1px solid #e5e7eb !important; border-radius: 12px !important; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+html, body, [class*="css"] {
+  font-family: 'Inter', Arial, sans-serif !important;
+  color: #2E2E2E !important;
+  -webkit-font-smoothing: antialiased;
+}
+.main .block-container {
+  max-width: 1200px !important;
+  padding: 0 2rem 4rem !important;
+}
+#MainMenu, footer, [data-testid="stDecoration"] { display: none !important; }
+
+/* ── FCamara app header bar ───────────────────────────────────────────────── */
+.fc-topbar {
+  background: #F04E37;
+  margin: -1rem -2rem 0; padding: 12px 2rem 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 3px solid #d43e29;
+}
+.fc-topbar-brand {
+  display: flex; align-items: center; gap: 10px;
+}
+.fc-topbar-logo {
+  font-size: 1.1rem; font-weight: 800; color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  letter-spacing: -.03em;
+}
+.fc-topbar-tag {
+  font-size: .68rem; font-weight: 700; color: rgba(255,255,255,.7) !important;
+  -webkit-text-fill-color: rgba(255,255,255,.7) !important;
+  letter-spacing: .08em; text-transform: uppercase;
+  background: rgba(0,0,0,.15); padding: 2px 8px; border-radius: 999px;
+}
+.fc-topbar-meta {
+  font-size: .72rem; color: rgba(255,255,255,.65) !important;
+  -webkit-text-fill-color: rgba(255,255,255,.65) !important;
+}
+
+/* ── Hero section ─────────────────────────────────────────────────────────── */
+.fc-hero {
+  padding: 28px 0 20px;
+  border-bottom: 3px solid #F04E37;
+  margin-bottom: 0;
+}
+.fc-hero-title {
+  font-size: 2.6rem; font-weight: 800; color: #2E2E2E !important;
+  -webkit-text-fill-color: #2E2E2E !important;
+  letter-spacing: -.05em; line-height: 1.1; margin-bottom: 6px;
+}
+.fc-hero-title span { color: #F04E37 !important; -webkit-text-fill-color: #F04E37 !important; }
+.fc-hero-sub {
+  font-size: .95rem; color: #666 !important;
+  -webkit-text-fill-color: #666 !important;
+  font-weight: 400; line-height: 1.5;
+}
+.fc-hero-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.fc-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #F5F5F5; border: 1px solid #E0E0E0;
+  color: #2E2E2E !important; -webkit-text-fill-color: #2E2E2E !important;
+  border-radius: 6px; padding: 4px 10px;
+  font-size: .75rem; font-weight: 600;
+}
+.fc-chip.orange {
+  background: #FFF3F1; border-color: rgba(240,78,55,.3);
+  color: #F04E37 !important; -webkit-text-fill-color: #F04E37 !important;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 0 !important;
+  background: #F5F5F5 !important;
+  border-radius: 10px !important;
+  padding: 4px !important;
+  border: none !important;
+  margin-top: 16px !important;
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 8px !important;
+  font-size: .84rem !important; font-weight: 600 !important;
+  padding: 7px 16px !important;
+  color: #666 !important; -webkit-text-fill-color: #666 !important;
+  background: transparent !important;
+  border: none !important;
+  transition: all .15s !important;
+}
+.stTabs [aria-selected="true"] {
+  color: #fff !important; -webkit-text-fill-color: #fff !important;
+  background: #F04E37 !important;
+  box-shadow: 0 2px 8px rgba(240,78,55,.3) !important;
+  font-weight: 700 !important;
+}
+.stTabs [data-baseweb="tab"]:hover:not([aria-selected="true"]) {
+  color: #F04E37 !important; -webkit-text-fill-color: #F04E37 !important;
+  background: #FFF3F1 !important;
+}
+/* Remove tab underline indicator */
+.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+.stTabs [data-baseweb="tab-border"]    { display: none !important; }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.stButton > button {
+  border-radius: 8px !important; font-weight: 700 !important;
+  font-size: .88rem !important; transition: all .15s !important;
+  letter-spacing: .01em !important;
+}
+.stButton > button[kind="primary"] {
+  background: #F04E37 !important; border: none !important;
+  color: #fff !important; -webkit-text-fill-color: #fff !important;
+  box-shadow: 0 2px 8px rgba(240,78,55,.3) !important;
+  padding: 10px 22px !important;
+}
+.stButton > button[kind="primary"]:hover {
+  background: #d43e29 !important;
+  box-shadow: 0 4px 16px rgba(240,78,55,.4) !important;
+  transform: translateY(-1px) !important;
+}
+.stButton > button[kind="secondary"] {
+  border: 1.5px solid #F04E37 !important;
+  color: #F04E37 !important; -webkit-text-fill-color: #F04E37 !important;
+  background: #fff !important;
+}
+.stButton > button[kind="secondary"]:hover { background: #FFF3F1 !important; }
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+/* All input text — FCamara widget rule: always hardcode, never inherit */
+input, select {
+  color: #2E2E2E !important; -webkit-text-fill-color: #2E2E2E !important;
+  background: #fff !important;
+}
+label {
+  color: #555555 !important; -webkit-text-fill-color: #555555 !important;
+  font-weight: 600 !important; font-size: .85rem !important;
+}
+.stTextArea textarea {
+  font-family: 'JetBrains Mono','Fira Code',monospace !important;
+  font-size: .83rem !important; border-radius: 8px !important;
+  border: 1.5px solid #E0E0E0 !important; line-height: 1.6 !important;
+  color: #2E2E2E !important; -webkit-text-fill-color: #2E2E2E !important;
+  background: #fff !important;
+}
+.stTextArea textarea:focus {
+  border-color: #F04E37 !important;
+  box-shadow: 0 0 0 3px rgba(240,78,55,.1) !important;
+  outline: none !important;
+}
+[data-testid="stFileUploaderDropzone"] {
+  border-radius: 10px !important;
+  border: 2px dashed rgba(240,78,55,.4) !important;
+  background: #FFF3F1 !important;
+  transition: border-color .2s !important;
+}
+[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: #F04E37 !important;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+  background: #FFF3F1 !important;
+  border-right: 1px solid rgba(240,78,55,.2) !important;
+}
+[data-testid="stSidebar"] section { padding-top: 1rem !important; }
+
+/* ── Finding cards ────────────────────────────────────────────────────────── */
+.scard {
+  border-radius: 10px; padding: 16px 20px; margin-bottom: 12px;
+  border: 1px solid #E0E0E0; background: #fff; color: #2E2E2E !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.scard.critical { border-left: 4px solid #F04E37; background: #FFF3F1; }
+.scard.high     { border-left: 4px solid #FF7A59; background: #fff9f7; }
+.scard.medium   { border-left: 4px solid #f59e0b; background: #fffdf0; }
+.scard.low      { border-left: 4px solid #3b82f6; background: #f5f8ff; }
+.scard.info     { border-left: 4px solid #9ca3af; background: #f9fafb; }
+.scard-title  { font-weight: 700; font-size: .97rem; color: #2E2E2E; margin-bottom: 5px; }
+.scard-meta   { font-size: .69rem; font-weight: 700; letter-spacing: .09em;
+                text-transform: uppercase; color: #666; margin-bottom: 10px; }
+.scard-desc   { font-size: .87rem; color: #2E2E2E; line-height: 1.65; margin-bottom: 10px; }
+.scard-rec    { background: #FFF3F1; border: 1px solid rgba(240,78,55,.2);
+                border-radius: 8px; padding: 9px 13px; font-size: .84rem;
+                color: #c03020; margin-bottom: 6px; }
+.scard-affects{ font-size: .78rem; color: #F04E37; font-weight: 600; margin-bottom: 6px; }
+.scard-q      { font-size: .78rem; color: #666; font-style: italic; margin-top: 6px; }
+
+/* ── Pills ────────────────────────────────────────────────────────────────── */
+.pill {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+}
+.pill-critical { background: #F04E37; color: #fff !important; -webkit-text-fill-color: #fff !important; }
+.pill-high     { background: #FFE5DF; color: #c03020 !important; -webkit-text-fill-color: #c03020 !important; border: 1px solid rgba(240,78,55,.3); }
+.pill-medium   { background: #fef3c7; color: #92400e !important; -webkit-text-fill-color: #92400e !important; }
+.pill-low      { background: #dbeafe; color: #1d4ed8 !important; -webkit-text-fill-color: #1d4ed8 !important; }
+.pill-info     { background: #F5F5F5; color: #666 !important;    -webkit-text-fill-color: #666 !important; }
+
+/* ── Stats row ────────────────────────────────────────────────────────────── */
+.statrow { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.stat {
+  flex: 1; min-width: 76px; background: #fff; border: 1px solid #E0E0E0;
+  border-radius: 10px; padding: 14px 10px; text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.stat .n { font-size: 1.85rem; font-weight: 800; line-height: 1.1; }
+.stat .l { font-size: .67rem; font-weight: 700; letter-spacing: .07em;
+           text-transform: uppercase; color: #666; margin-top: 4px; }
+.stat-c .n { color: #F04E37; }
+.stat-h .n { color: #FF7A59; }
+.stat-m .n { color: #f59e0b; }
+.stat-l .n { color: #3b82f6; }
+.stat-i .n { color: #9ca3af; }
+.stat-t .n { color: #2E2E2E; }
+
+/* ── Memory cards ─────────────────────────────────────────────────────────── */
+.memcard {
+  background: #fff; border: 1px solid #E0E0E0;
+  border-radius: 10px; padding: 14px 10px; text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.memcard.live { border-color: #F04E37; background: #FFF3F1; }
+.memcard .ic  { font-size: 1.25rem; }
+.memcard .nm  { font-size: .76rem; font-weight: 700; color: #2E2E2E; margin-top: 4px; }
+.memcard .sz  { font-size: .67rem; color: #666; }
+.memcard .ls  { font-size: .71rem; font-weight: 700; color: #F04E37; margin-top: 2px; }
+
+/* ── ADR cards ────────────────────────────────────────────────────────────── */
+.adrcard {
+  background: #fff; border: 1px solid #E0E0E0;
+  border-radius: 10px; padding: 18px 20px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.adrnum   { font-size: .71rem; font-weight: 700; color: #F04E37; letter-spacing: .08em; text-transform: uppercase; }
+.adrtitle { font-size: 1rem; font-weight: 700; color: #2E2E2E; margin: 4px 0; }
+.adrstatus{
+  display: inline-block; background: #FFF3F1; color: #F04E37;
+  border: 1px solid rgba(240,78,55,.3); border-radius: 999px;
+  padding: 2px 10px; font-size: .69rem; font-weight: 700;
+}
+
+/* ── Section headings (H2 left bar — FCamara spec) ────────────────────────── */
+.fc-h2 {
+  font-size: 1.05rem; font-weight: 700; color: #2E2E2E;
+  border-left: 4px solid #F04E37; padding-left: 12px;
+  margin: 20px 0 12px; line-height: 1.4;
+}
+.fc-h3 {
+  font-size: .92rem; font-weight: 700; color: #2E2E2E;
+  border-left: 3px solid #FF7A59; padding-left: 10px;
+  margin: 16px 0 8px;
+}
+
+/* ── Section rule (FCamara orange divider) ────────────────────────────────── */
+.fc-rule { border: none; border-top: 2px solid #F04E37; opacity: .25; margin: 1.2rem 0; }
+
+/* ── Metrics (native Streamlit) ───────────────────────────────────────────── */
+[data-testid="stMetric"] {
+  background: #fff; border: 1px solid #E0E0E0;
+  border-radius: 10px; padding: 14px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+[data-testid="stMetricValue"] {
+  color: #F04E37 !important; -webkit-text-fill-color: #F04E37 !important;
+  font-weight: 800 !important;
+}
+[data-testid="stMetricLabel"] {
+  color: #666 !important; -webkit-text-fill-color: #666 !important;
+}
+
+/* ── Expander ─────────────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+  border: 1px solid #E0E0E0 !important; border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04) !important;
+}
+[data-testid="stExpander"] > details > summary {
+  font-weight: 600 !important; color: #2E2E2E !important;
+  padding: 12px 16px !important;
+}
+[data-testid="stExpander"] > details > summary:hover { color: #F04E37 !important; }
+
+/* ── Alert banners ────────────────────────────────────────────────────────── */
+[data-testid="stAlert"] {
+  border-radius: 10px !important; border-left-width: 4px !important;
+}
+/* Success → FCamara orange tint */
+[data-testid="stAlert"][kind="success"] {
+  background: #FFF3F1 !important; border-color: #F04E37 !important;
+}
+/* Info → neutral */
+[data-testid="stAlert"][kind="info"] {
+  background: #F5F5F5 !important; border-color: #E0E0E0 !important;
+}
+
+/* ── Code ─────────────────────────────────────────────────────────────────── */
+code {
+  background: #FFF3F1 !important; color: #c03020 !important;
+  border-radius: 4px !important; padding: 1px 5px !important;
+  font-size: .88em !important;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────────────── */
+hr { border: none !important; border-top: 1px solid #E0E0E0 !important; margin: 1rem 0 !important; }
+
+/* ── Caption ──────────────────────────────────────────────────────────────── */
+.stCaption, [data-testid="stCaptionContainer"],
+small, .caption { color: #666 !important; -webkit-text-fill-color: #666 !important; }
+
+/* ── Toggle ───────────────────────────────────────────────────────────────── */
+[data-testid="stToggleSwitch"][aria-checked="true"] > div:first-child {
+  background: #F04E37 !important;
+}
+
+/* ── Progress / spinner ───────────────────────────────────────────────────── */
+[data-testid="stSpinner"] > div { border-top-color: #F04E37 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -249,41 +515,109 @@ RAW OCR TEXT:
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    # Language toggle — first thing in sidebar
-    lang_choice = st.radio("🌐", ["🇺🇸 English", "🇧🇷 Português"], horizontal=True, label_visibility="collapsed")
+    st.markdown("""
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0 12px">
+      <span style="font-size:1.2rem">🏗️</span>
+      <span style="font-weight:800;font-size:1rem;color:#2E2E2E">arch-review</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Language toggle
+    lang_choice = st.radio(
+        "🌐 Language", ["🇺🇸 English", "🇧🇷 Português"],
+        horizontal=True, label_visibility="collapsed"
+    )
     lang = "pt" if "Português" in lang_choice else "en"
     st.session_state["lang"] = lang
     t = get_t(lang)
     msgs = rand_msgs(lang)
 
-    st.markdown(f"## {t('sidebar.settings')}")
-    selected_model = st.selectbox(t("sidebar.model"), list(SUPPORTED_MODELS.keys()), index=0, label_visibility="collapsed")
+    st.markdown('<hr class="fc-rule">', unsafe_allow_html=True)
+
+    # Model
+    st.markdown(f'<div class="fc-h3">{t("sidebar.model")}</div>', unsafe_allow_html=True)
+    selected_model = st.selectbox(
+        t("sidebar.model"), list(SUPPORTED_MODELS.keys()),
+        index=0, label_visibility="collapsed"
+    )
     provider = SUPPORTED_MODELS.get(selected_model, "")
     st.caption(f"{t('sidebar.provider')} `{provider}`")
 
-    api_key = st.text_input(t("sidebar.apikey"), type="password",
-        placeholder=t("sidebar.apikey.ph"), label_visibility="collapsed")
+    # API Key
+    api_key = st.text_input(
+        "🔑 API Key", type="password",
+        placeholder=t("sidebar.apikey.ph")
+    )
     if api_key:
         os.environ[ENV_MAP.get(provider, "OPENAI_API_KEY")] = api_key
         st.success(t("sidebar.apikey.ok"))
 
-    st.divider()
-    focus_areas = st.multiselect(t("sidebar.focus"), [c.value for c in FindingCategory],
-        default=[], help=t("sidebar.focus.help"))
+    st.markdown('<hr class="fc-rule">', unsafe_allow_html=True)
+
+    # Review options
+    st.markdown(f'<div class="fc-h3">{t("sidebar.focus")}</div>', unsafe_allow_html=True)
+    focus_areas = st.multiselect(
+        t("sidebar.focus"), [c.value for c in FindingCategory],
+        default=[], help=t("sidebar.focus.help"),
+        label_visibility="collapsed"
+    )
     gen_adrs = st.toggle(t("sidebar.adrs"), value=True)
-    st.divider()
-    st.caption("🏗️ [arch-review](https://github.com/juliopessan/arch-review-assistant) · MIT")
+
+    st.markdown('<hr class="fc-rule">', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:.72rem;color:#666;line-height:1.8">'
+        '🏗️ <a href="https://github.com/juliopessan/arch-review-assistant" '
+        'style="color:#F04E37;font-weight:600">arch-review</a> · MIT<br>'
+        'by <strong style="color:#2E2E2E">FCamara</strong>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+# ── App header bar (FCamara orange) ───────────────────────────────────────────
+st.markdown(f"""
+<div class="fc-topbar">
+  <div class="fc-topbar-brand">
+    <span class="fc-topbar-logo">🏗️ arch-review</span>
+    <span class="fc-topbar-tag">Multi-Agent AI</span>
+  </div>
+  <span class="fc-topbar-meta">by FCamara · MIT</span>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Hero ───────────────────────────────────────────────────────────────────────
-st.markdown(f'<div class="badge">{t("app.badge")}</div>', unsafe_allow_html=True)
-st.title(t("app.title"))
-st.markdown(t("app.subtitle"))
-st.divider()
+lang_val = st.session_state.get("lang", "en")
+hero_sub = (
+    "4 specialized agents — Security, Reliability, Cost, Observability — "
+    "running in parallel, learning from every review."
+    if lang_val == "en" else
+    "4 agentes especializados — Segurança, Confiabilidade, Custo, Observabilidade — "
+    "rodando em paralelo, aprendendo a cada revisão."
+)
+st.markdown(f"""
+<div class="fc-hero">
+  <div class="fc-hero-title">Architecture <span>Review</span></div>
+  <div class="fc-hero-sub">{hero_sub}</div>
+  <div class="fc-hero-badges">
+    <span class="fc-chip orange">🤖 Agent Manager</span>
+    <span class="fc-chip orange">🔐 Security</span>
+    <span class="fc-chip orange">🛡️ Reliability</span>
+    <span class="fc-chip orange">💰 Cost</span>
+    <span class="fc-chip orange">📡 Observability</span>
+    <span class="fc-chip orange">🧠 Synthesizer</span>
+    <span class="fc-chip">✦ Self-Evolving Memory</span>
+    <span class="fc-chip">⚡ Parallel Execution</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab_review, tab_squad, tab_findings, tab_adrs, tab_export, tab_memory = st.tabs([
-    t("tab.review"), t("tab.squad"), t("tab.findings"),
-    t("tab.adrs"),   t("tab.export"), t("tab.memory"),
+    f"🔍 {t('tab.review')}",
+    f"🤖 {t('tab.squad')}",
+    f"📋 {t('tab.findings')}",
+    f"📄 {t('tab.adrs')}",
+    f"📤 {t('tab.export')}",
+    f"🧠 {t('tab.memory')}",
 ])
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -293,7 +627,7 @@ with tab_review:
     col_l, col_r = st.columns([3, 2], gap="large")
 
     with col_l:
-        st.markdown(t("review.arch.title"))
+        st.markdown(f'<div class="fc-h2">{t("review.arch.title")}</div>', unsafe_allow_html=True)
         arch_text = st.text_area("arch", height=280, label_visibility="collapsed",
             placeholder=t("review.arch.ph"),
             value=st.session_state.get("arch_prefill", ""))
@@ -301,7 +635,7 @@ with tab_review:
         context = st.text_input(t("review.ctx"), placeholder=t("review.ctx.ph"))
 
     with col_r:
-        st.markdown(t("review.upload.title"))
+        st.markdown(f'<div class="fc-h2">{t("review.upload.title")}</div>', unsafe_allow_html=True)
         st.caption(f"{t('review.upload.cap')} {', '.join('.' + f for f in get_supported_formats())}")
         uploaded = st.file_uploader("Upload", type=get_supported_formats(), label_visibility="collapsed")
 

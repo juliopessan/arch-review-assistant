@@ -1,16 +1,15 @@
-[server]
-headless = true
-port = 8501
-enableCORS = false
-enableXsrfProtection = true
+[theme]
+# FCamara Brand Colors (fcamara-style-guide skill)
+primaryColor             = "#F04E37"   # FCamara orange
+backgroundColor          = "#FFFFFF"   # clean white canvas
+secondaryBackgroundColor = "#FFF3F1"   # FCamara orange tint (sidebar, inputs)
+textColor                = "#2E2E2E"   # FCamara dark grey
+
+# Typography — closest system equivalent to Arial
+font = "sans serif"
 
 [browser]
 gatherUsageStats = false
 
-[theme]
-base = "light"
-primaryColor = "#6366f1"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f8fafc"
-textColor = "#1e293b"
-font = "sans serif"
+[server]
+headless = true
