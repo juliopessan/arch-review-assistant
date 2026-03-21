@@ -848,17 +848,14 @@ with tab_squad:
         agent_states["manager_agent"] = {"status": "running", "count": 0}
 
     office_html = build_squad_office_html(agent_states, lang=lang, plan=plan_dict)
-    components.html(office_html, height=620, scrolling=False)
-
-    # Result summary below canvas
-    if review_result and "squad:" in review_result.model_used:
-        s = review_result.summary
-        st.success(f"{t('squad.complete')} **{s.total_findings} {t('squad.total_findings')}** · {s.critical_count} {t('squad.critical')} · {s.high_count} {t('squad.high')}")
-        if s.top_risk:
-            st.warning(f"{t('squad.top_risk')} **{esc(s.top_risk)}**")
-        st.info(t("review.squad.trigger"))
-    elif not st.session_state.get("squad_running"):
-        st.caption(t("squad.no_result"))
+    # Height calculation (layout=wide ≈ 1160px, NCOLS=4, PAD=8, VPAD=28, CTOP=24):
+    # cellW = floor((1160 - 16 - 3) / 4) = 285px
+    # cellH = round(285 * 0.92) = 262px
+    # sceneH = 4*(262+28) + 8*2 + 24 + 20 = 1220px
+    # + manager card 68px + margins 16px + browser chrome 16px ≈ 1320px
+    # ResizeObserver in the HTML auto-reports actual height to Streamlit,
+    # but we set a safe max so the iframe never clips during first paint.
+    components.html(office_html, height=1320, scrolling=False)
 
     if st.session_state.get("squad_running"):
         arch_inp = ArchitectureInput(
@@ -954,10 +951,11 @@ with tab_squad:
         if "squad:" in r.model_used:
             s = r.summary
             st.success(f"{t('squad.complete')} **{s.total_findings} {t('squad.total_findings')}** · {s.critical_count} {t('squad.critical')} · {s.high_count} {t('squad.high')}")
-            if s.top_risk: st.warning(f"{t('squad.top_risk')} **{esc(s.top_risk)}**")
+            if s.top_risk:
+                st.warning(f"{t('squad.top_risk')} **{esc(s.top_risk)}**")
             st.info(t("review.squad.trigger"))
-    else:
-        st.info(t("squad.no_result"))
+    elif not st.session_state.get("squad_running"):
+        st.caption(t("squad.no_result"))
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗

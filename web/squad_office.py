@@ -262,7 +262,7 @@ const LAYOUT=[
   [1,2,3,8],  // Synthesizer (center 2 cols, row 3)
 ];
 const NCOLS=4, NROWS=4;
-const PAD=10, VPAD=36, CTOP=30;
+const PAD=8, VPAD=28, CTOP=24;
 
 // ── Agent class ───────────────────────────────────────────────────────────────
 // Agents live in SCENE pixel coords (not cell-relative).
@@ -370,7 +370,7 @@ function initScene(){{
   const cv=document.getElementById('cv'); if(!cv)return;
   const avail=cv.parentElement.clientWidth||780;
   const cellW=Math.floor((avail-PAD*2-3)/NCOLS); // 3px tolerance
-  const cellH=Math.round(cellW*0.85);
+  const cellH=Math.round(cellW*0.92); // taller cells = more room for desk+character
   sceneW=avail;
   sceneH=NROWS*(cellH+VPAD)+PAD*2+CTOP+20;
   cv.width=sceneW; cv.height=sceneH;
@@ -502,10 +502,19 @@ window.addEventListener('load',()=>{{
   updateMgr();
   initScene();
   rafId=requestAnimationFrame(loop);
+
+  // Notify parent iframe of actual content height so Streamlit can size correctly
+  function reportHeight(){{
+    const h = document.getElementById('wrap').scrollHeight + 4;
+    window.parent.postMessage({{type:'streamlit:setFrameHeight', height:h}}, '*');
+  }}
+  // Report after first paint and on resize
+  setTimeout(reportHeight, 200);
   window.addEventListener('resize',()=>{{
     if(rafId)cancelAnimationFrame(rafId);
     initScene();
     rafId=requestAnimationFrame(loop);
+    setTimeout(reportHeight, 100);
   }});
 }});
 </script></body></html>"""
