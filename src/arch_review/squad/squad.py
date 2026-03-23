@@ -111,14 +111,27 @@ class ReviewSquad:
         self.max_tokens = max_tokens
         self.memory_dir = memory_dir
 
+        # Load installed skills and extend AGENTS dynamically
+        from arch_review.skills import SkillRegistry
+        registry = SkillRegistry()
+        skill_agents = [s.as_agent_tuple for s in registry.load_all_installed()]
+        self._active_agents = list(self.AGENTS) + skill_agents
+
         self.agent_memories = {
             name: AgentMemory(name, memory_dir)
-            for name, _, _ in self.AGENTS
+            for name, _, _ in self._active_agents
         }
         self.agent_memories["synthesizer_agent"] = AgentMemory("synthesizer_agent", memory_dir)
         self.agent_memories["manager_agent"]     = AgentMemory("manager_agent",     memory_dir)
         self.squad_memory = SquadMemory(memory_dir)
         self.manager = AgentManager(model=model, memory_dir=memory_dir)
+
+        if skill_agents:
+            logger.info(
+                "ReviewSquad: %d skill agent(s) loaded: %s",
+                len(skill_agents),
+                [a[0] for a in skill_agents],
+            )
 
     def review(self, arch_input: ArchitectureInput) -> ReviewResult:
         """Run the full managed squad review synchronously."""
@@ -155,10 +168,10 @@ class ReviewSquad:
         # ── Phase 1: Run enabled agents in parallel ────────────────────────────
         active_agents = [
             (name, system, prompt_fn)
-            for name, system, prompt_fn in self.AGENTS
+            for name, system, prompt_fn in self._active_agents
             if plan.get_directive(name).enabled
         ]
-        logger.info("ReviewSquad: launching %d/%d agents", len(active_agents), len(self.AGENTS))
+        logger.info("ReviewSquad: launching %d/%d agents", len(active_agents), len(self._active_agents))
 
         tasks = [
             self._run_agent(

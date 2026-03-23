@@ -89,7 +89,7 @@ class TestAgentMemory:
         mem = AgentMemory("security_agent", tmp_path)
         content = mem.read()
         assert "Security Agent" in content
-        assert "OWASP" in content
+        assert "Adversary" in content  # new SOUL codename
 
     def test_append_lesson(self, tmp_path: Path) -> None:
         mem = AgentMemory("security_agent", tmp_path)
@@ -120,7 +120,7 @@ class TestAgentMemory:
         mem = AgentMemory("custom_agent", tmp_path)
         assert mem.agent_file.exists()
         content = mem.read()
-        assert "custom_agent" in content
+        assert "Custom Agent" in content  # _default_soul title-cases the name
 
 
 class TestSquadMemory:

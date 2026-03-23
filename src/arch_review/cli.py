@@ -560,3 +560,75 @@ def history_cmd(action: str | None, limit: int, json_output: bool) -> None:
             f"[dim]{entry.get('timestamp', 'unknown time')}[/dim] — {pretty_details}"
         )
     console.print()
+
+
+# ── Skill commands ─────────────────────────────────────────────────────────────
+
+@main.group()
+def skill() -> None:
+    """Manage arch-review Skills — pluggable specialist agents."""
+
+
+@skill.command("list")
+def skill_list() -> None:
+    """List all available and installed skills."""
+    from arch_review.skills import SkillRegistry
+    registry = SkillRegistry()
+    skills = registry.list_available()
+
+    console.print("\n[bold]Available Skills[/bold]\n")
+    for s in skills:
+        status = "[green]✓ installed[/green]" if s.installed else "[dim]not installed[/dim]"
+        console.print(
+            f"  {s.icon} [bold]{s.name}[/bold] v{s.version} — {s.description}\n"
+            f"     {status}  ·  agent: [cyan]{s.agent_key}[/cyan]\n"
+        )
+    console.print(
+        "[dim]Install with:[/dim] [bold]arch-review skill install <name>[/bold]\n"
+    )
+
+
+@skill.command("install")
+@click.argument("name")
+def skill_install(name: str) -> None:
+    """Install a skill. Example: arch-review skill install database"""
+    from arch_review.skills import SkillRegistry
+    registry = SkillRegistry()
+    try:
+        meta = registry.install(name)
+        console.print(
+            f"\n[green]✓ Installed:[/green] {meta.icon} [bold]{meta.name}[/bold] v{meta.version}\n"
+            f"  Agent key: [cyan]{meta.agent_key}[/cyan]\n"
+            f"  Location:  [dim]{meta.skill_dir}[/dim]\n"
+            f"\n[dim]The {meta.agent_key} will join your squad on the next review.[/dim]\n"
+        )
+    except FileExistsError:
+        console.print(f"\n[yellow]Skill '{name}' is already installed.[/yellow]\n")
+    except ValueError as exc:
+        console.print(f"\n[red]Error:[/red] {exc}\n")
+
+
+@skill.command("remove")
+@click.argument("name")
+def skill_remove(name: str) -> None:
+    """Remove an installed skill. Example: arch-review skill remove database"""
+    from arch_review.skills import SkillRegistry
+    registry = SkillRegistry()
+    if registry.remove(name):
+        console.print(f"\n[green]✓ Removed skill:[/green] {name}\n")
+    else:
+        console.print(f"\n[yellow]Skill '{name}' is not installed.[/yellow]\n")
+
+
+@skill.command("show")
+@click.argument("name")
+def skill_show(name: str) -> None:
+    """Show the SOUL of an installed skill."""
+    from arch_review.skills import SkillRegistry
+    registry = SkillRegistry()
+    try:
+        s = registry.load(name)
+        console.print(f"\n[bold]{s.meta.icon} {s.meta.name} — SOUL[/bold]\n")
+        console.print(s.soul)
+    except FileNotFoundError as exc:
+        console.print(f"\n[red]Error:[/red] {exc}\n")
