@@ -103,7 +103,7 @@ class ReviewSquad:
         self,
         model: str = "claude-sonnet-4-20250514",
         temperature: float = 0.2,
-        max_tokens: int = 3000,
+        max_tokens: int = 4500,
         memory_dir: Path | None = None,
     ) -> None:
         self.model = model

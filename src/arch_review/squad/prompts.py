@@ -23,6 +23,12 @@ Return a JSON object with this exact schema:
   "lesson_for_memory": "string — one thing this agent learned from this specific review (for self-improvement)"
 }
 
+DEPTH RULES:
+- Each distinct risk = one separate finding. Do NOT merge unrelated issues.
+- A finding with a vague title like "Security Issues" is invalid — be specific.
+- Minimum finding count is enforced: shallow reviews miss real risks.
+- Generic advice not grounded in the described architecture = discard it.
+
 Return ONLY valid JSON. No markdown, no preamble."""
 
 # ── Security Agent ─────────────────────────────────────────────────────────────
@@ -57,7 +63,9 @@ Focus exclusively on: authentication, authorization, secrets management, encrypt
 network exposure, compliance (LGPD/GDPR/PCI-DSS if mentioned), injection attacks,
 dependency vulnerabilities, and supply chain risks.
 
-Find 3-8 security findings. Prioritize ruthlessly — not everything is critical."""
+Find 5-9 security findings. Go deep — surface non-obvious attack chains, not just
+checklist items. A review with only 3 findings usually means shallow coverage.
+Prioritize ruthlessly by exploitability × impact."""
 
 # ── Reliability Agent ──────────────────────────────────────────────────────────
 
@@ -91,7 +99,9 @@ Focus exclusively on: single points of failure, multi-AZ/region availability, ci
 bulkheads, retry/backoff strategies, database replication and failover, message queue durability,
 graceful degradation, RTO/RPO readiness, and disaster recovery.
 
-Find 3-8 reliability findings. Be specific about which component fails and what breaks as a result."""
+Find 5-8 reliability findings. Trace every dependency — hidden SPOFs are more
+dangerous than obvious ones. A shallow review misses cascading failure paths.
+Name the specific component, the specific failure mode, and the blast radius."""
 
 # ── Cost Agent ────────────────────────────────────────────────────────────────
 
@@ -125,7 +135,9 @@ Focus exclusively on: right-sizing opportunities, auto-scaling gaps, data transf
 storage tier optimization, reserved vs on-demand economics, idle/underutilized resources,
 managed service vs self-hosted trade-offs, and serverless economics.
 
-Find 2-5 cost findings. Only flag real structural cost problems, not micro-optimizations."""
+Find 4-7 cost findings. Decompose the architecture into billing line items:
+compute, storage, data transfer, managed services, API calls. Idle resources,
+egress patterns, and over-provisioning are each separate findings."""
 
 # ── Observability Agent ────────────────────────────────────────────────────────
 
@@ -159,7 +171,9 @@ Focus exclusively on: structured logging vs raw files, distributed tracing, metr
 SLI/SLO definitions, alerting coverage vs alert fatigue, health/readiness/liveness probes,
 correlation IDs, runbook availability, and incident response readiness.
 
-Find 2-6 observability findings. Focus on what would make incidents impossible to diagnose."""
+Find 4-7 observability findings. Audit each pillar (logs, metrics, traces)
+independently — a gap in any one pillar is a separate finding. Missing runbooks,
+undefined SLOs, and alert coverage gaps are each distinct issues."""
 
 # ── Scalability Agent ─────────────────────────────────────────────────────────
 
@@ -195,7 +209,7 @@ and read replicas, connection pool exhaustion, synchronous bottlenecks in critic
 event-driven decoupling opportunities, cache stampede risks, fan-out explosions, and
 independent deployability of services.
 
-Find 3-7 scalability findings. Quantify impact where possible (e.g. "this single DB handles
+Find 5-8 scalability findings. Quantify impact where possible (e.g. "this single DB handles
 all writes — at 500 rps this becomes the bottleneck")."""
 
 # ── Performance Agent ──────────────────────────────────────────────────────────
@@ -231,7 +245,9 @@ synchronous call chains in critical paths, large payload serialization, missing 
 database connection overhead, cold start latency, static asset delivery gaps, and
 compute-heavy operations that block request threads.
 
-Find 3-6 performance findings. Trace the critical user path and identify where latency accumulates."""
+Find 4-7 performance findings. Trace the critical user path end-to-end.
+Each latency contributor (N+1, sync call, missing cache, cold start) is a
+separate finding. Do not merge distinct performance issues into one."""
 
 # ── Maintainability Agent ──────────────────────────────────────────────────────
 
@@ -266,7 +282,9 @@ shared database anti-patterns, deployment pipeline complexity, feature flag abse
 testability at each layer (unit/integration/e2e), documentation and runbook gaps,
 shared library versioning risks, and monolith-to-microservices migration debt.
 
-Find 3-6 maintainability findings. Focus on what makes the system painful to change safely."""
+Find 4-7 maintainability findings. Examine coupling, bus factor, deployment
+complexity, and test coverage signals separately. Each dimension of
+maintainability risk deserves its own finding."""
 
 SYNTHESIZER_SYSTEM = """\
 You are a principal architect synthesizing findings from 4 specialized reviewers into a final review.
