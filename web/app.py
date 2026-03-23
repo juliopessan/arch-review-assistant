@@ -1075,9 +1075,36 @@ with tab_findings:
             default=[sv.value for sv in Severity], label_visibility="collapsed")
         filtered = [f for f in r.findings if f.severity.value in sev_filter]
 
-        for f in filtered:
-            css = SEV_CSS[f.severity]; pill = SEV_PILL[f.severity]
-            cat = f.category.value.upper().replace("_", " ")
+        # Feedback store (immune system)
+        from arch_review.feedback.store import FeedbackStore, FeedbackDecision
+        fb_store = FeedbackStore()
+
+        # Category → agent mapping for feedback routing
+        CAT_AGENT = {
+            "security":        "security_agent",
+            "reliability":     "reliability_agent",
+            "cost":            "cost_agent",
+            "observability":   "observability_agent",
+            "scalability":     "scalability_agent",
+            "performance":     "performance_agent",
+            "maintainability": "maintainability_agent",
+            "missing_adr":     "synthesizer_agent",
+            "trade_off":       "synthesizer_agent",
+            "risk":            "synthesizer_agent",
+        }
+
+        # Load existing feedback decisions for this session
+        if "feedback_decisions" not in st.session_state:
+            st.session_state["feedback_decisions"] = {}
+
+        fb_label_approve = "👍 Approve" if lang == "en" else "👍 Aprovar"
+        fb_label_reject  = "👎 Reject"  if lang == "en" else "👎 Rejeitar"
+        fb_placeholder   = "Why? (optional)" if lang == "en" else "Por quê? (opcional)"
+        fb_saved_msg     = "✓ Feedback saved" if lang == "en" else "✓ Feedback salvo"
+
+        for idx, f in enumerate(filtered):
+            css  = SEV_CSS[f.severity];  pill = SEV_PILL[f.severity]
+            cat  = f.category.value.upper().replace("_", " ")
             comps = f'<div class="scard-affects">{t("findings.affects")} {esc(", ".join(f.affected_components))}</div>' if f.affected_components else ""
             qs_html = "".join(f'&ldquo;{esc(q)}&rdquo; &nbsp;' for q in f.questions_to_ask)
             refs = f'<div class="scard-q">📚 {esc(" · ".join(f.references))}</div>' if f.references else ""
@@ -1088,6 +1115,43 @@ with tab_findings:
               {comps}<div class="scard-rec">{t('findings.rec_prefix')} {esc(f.recommendation)}</div>
               {f'<div class="scard-q">💬 {qs_html}</div>' if qs_html else ""}{refs}
             </div>""", unsafe_allow_html=True)
+
+            # ── Feedback buttons ────────────────────────────────────────────────
+            fkey = f"fb_{idx}_{f.title[:30]}"
+            decision_taken = st.session_state["feedback_decisions"].get(fkey)
+
+            if decision_taken:
+                icon = "👍" if decision_taken == "approve" else "👎"
+                st.caption(f"{icon} {fb_saved_msg} — {f.title[:50]}")
+            else:
+                fc1, fc2, fc3 = st.columns([1, 1, 4])
+                with fc1:
+                    if st.button(fb_label_approve, key=f"approve_{fkey}",
+                                 use_container_width=True, type="secondary"):
+                        agent = CAT_AGENT.get(f.category.value, "synthesizer_agent")
+                        fb_store.record(agent, f.title, f.category.value,
+                                        f.severity.value, FeedbackDecision.APPROVE)
+                        st.session_state["feedback_decisions"][fkey] = "approve"
+                        st.rerun()
+                with fc2:
+                    if st.button(fb_label_reject, key=f"reject_{fkey}",
+                                 use_container_width=True, type="secondary"):
+                        st.session_state[f"show_reason_{fkey}"] = True
+                        st.rerun()
+
+                # Reason input for rejections
+                if st.session_state.get(f"show_reason_{fkey}"):
+                    with fc3:
+                        reason = st.text_input("", placeholder=fb_placeholder,
+                                               key=f"reason_{fkey}", label_visibility="collapsed")
+                    if st.button("✓ Confirm reject", key=f"confirm_{fkey}", type="primary"):
+                        agent = CAT_AGENT.get(f.category.value, "synthesizer_agent")
+                        fb_store.record(agent, f.title, f.category.value,
+                                        f.severity.value, FeedbackDecision.REJECT,
+                                        reason=reason)
+                        st.session_state["feedback_decisions"][fkey] = "reject"
+                        st.session_state.pop(f"show_reason_{fkey}", None)
+                        st.rerun()
 
         if r.recommended_adrs:
             st.markdown(t("findings.adrs_title"))
@@ -1467,6 +1531,64 @@ with tab_memory:
         st.caption(f"{started_label}: `{rm.started_at[:19].replace('T',' ')} UTC` · {model_label}: `{rm.model_used}`")
 
     st.divider()
+
+    # ── Feedback Loop Dashboard (Module 09 — Immune System) ────────────────────
+    from arch_review.feedback.store import FeedbackStore, FeedbackDecision, AGENT_DOMAIN
+    fb_store = FeedbackStore()
+    fb_stats  = fb_store.get_stats()
+
+    fb_title = "**🛡️ Feedback Loop — Immune System**" if lang == "en" \
+        else "**🛡️ Feedback Loop — Sistema Imunológico**"
+    fb_cap = "Approve/reject history injected into every agent prompt to prevent repeating mistakes." \
+        if lang == "en" else \
+        "Histórico de approve/reject injetado em cada agente para evitar repetir erros."
+    st.markdown(fb_title)
+    st.caption(fb_cap)
+
+    if fb_stats["total_entries"] == 0:
+        st.info("No feedback yet — use 👍/👎 buttons on findings to train the agents." if lang == "en"
+                else "Sem feedback ainda — use os botões 👍/👎 nos findings para treinar os agentes.")
+    else:
+        fb1, fb2, fb3 = st.columns(3)
+        fb1.metric("Total Feedback",  fb_stats["total_entries"])
+        fb2.metric("✅ Approved",     fb_stats["total_approved"])
+        fb3.metric("❌ Rejected",     fb_stats["total_rejected"])
+
+        if fb_stats["domains"]:
+            st.markdown('<div class="fc-h3">Per-domain breakdown</div>', unsafe_allow_html=True)
+            fb_cols = st.columns(min(len(fb_stats["domains"]), 4))
+            for i, (domain, ds) in enumerate(fb_stats["domains"].items()):
+                with fb_cols[i % 4]:
+                    reject_color = "#F04E37" if ds["rejected"] > 0 else "#22c55e"
+                    st.markdown(
+                        f'<div class="memcard live" style="border-color:{reject_color}">'
+                        f'<div class="ic">{"❌" if ds["rejected"] else "✅"}</div>'
+                        f'<div class="nm">{domain.title()}</div>'
+                        f'<div class="sz">{ds["capacity"]}</div>'
+                        f'<div class="ls">{ds["rejected"]} rejected · {ds["approved"]} approved</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+        # Clear feedback buttons
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("⚙️ Manage feedback" if lang == "en" else "⚙️ Gerenciar feedback"):
+            st.caption("Clear domain feedback to reset agent behavior for that area." if lang == "en"
+                       else "Limpe o feedback por domínio para resetar o comportamento dos agentes.")
+            clear_domain = st.selectbox(
+                "Select domain to clear" if lang == "en" else "Domínio para limpar",
+                list(fb_stats["domains"].keys()) if fb_stats["domains"] else ["— no feedback —"],
+                label_visibility="visible"
+            )
+            if st.button("🗑️ Clear domain feedback" if lang == "en" else "🗑️ Limpar feedback do domínio",
+                         type="secondary"):
+                # find agent for domain
+                agent_for = next((a for a, d in AGENT_DOMAIN.items() if d == clear_domain), None)
+                if agent_for:
+                    removed = fb_store.clear_domain(agent_for)
+                    st.success(f"Cleared {removed} entries for {clear_domain}" if lang == "en"
+                               else f"{removed} entradas removidas para {clear_domain}")
+                    st.rerun()
 
     # ── File viewer ────────────────────────────────────────────────────────────
     sel = st.selectbox(t("memory.view"), alist_full, format_func=lambda n: f"{AGENT_META_MEM[n]['ic']} {AGENT_META_MEM[n]['nm']}")

@@ -321,7 +321,8 @@ class ReviewSquad:
         context: str,
         plan: OrchestrationPlan,
     ) -> str:
-        """Build agent prompt enriched with manager's focus_note."""
+        """Build agent prompt enriched with manager's focus_note + feedback history."""
+        from arch_review.feedback.store import FeedbackStore
         directive = plan.get_directive(agent_name)
 
         # Inject manager's focus note into context
@@ -339,10 +340,18 @@ class ReviewSquad:
             flags = ", ".join(plan.compliance_flags)
             enriched_context += f"\n\nCompliance regimes detected: {flags}. Pay extra attention."
 
+        # Inject feedback history (Module 09: agents consult before suggesting)
+        feedback_store = FeedbackStore(self.memory_dir)
+        feedback_section = feedback_store.get_feedback_section(agent_name)
+
+        lessons = self.agent_memories[agent_name].get_lessons_section()
+        if feedback_section:
+            lessons = f"{feedback_section}\n\n{lessons}" if lessons else feedback_section
+
         return prompt_fn(
             architecture,
             enriched_context,
-            self.agent_memories[agent_name].get_lessons_section(),
+            lessons,
             self.squad_memory.get_recurring_patterns(),
         )
 
