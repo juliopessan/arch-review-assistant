@@ -28,6 +28,7 @@ Paste a description, upload a PDF or diagram image, and get back:
 - **Questions a principal architect would ask** in a real review
 - **Architecture Decision Records (ADRs)** auto-generated from findings
 - **Agents that learn** from every review and improve over time
+- **Feedback Loop** — approve/reject findings with 👍/👎, agents consult before suggesting to avoid repeating mistakes
 - **Run Time report** — per-agent timing, tokens, cost, and ROI vs. manual review
 
 No boilerplate. No generic advice. Every finding is specific to *your* architecture.
@@ -173,6 +174,38 @@ A **pixel-art animated canvas** where each of the 9 agents is a character at a d
 - **4-row layout**: Manager → 4 specialists → 3 new agents → Synthesizer
 - **Auto-height**: ResizeObserver reports actual canvas height to Streamlit iframe
 - **Diamond AR favicon**: SVG logo (Orange DNA palette `#F04E37`) shown in browser tab
+
+
+### Feedback Loop (Immune System)
+
+Inspired by Module 09 *"Agents are 30% of the work. The other 70% is the immune system."*
+
+Every finding card has **👍 Approve** and **👎 Reject** buttons. When you reject a finding you can optionally say why. That decision is:
+
+1. **Saved** to `~/.arch-review/feedback/<domain>.json` (FIFO, max 30 entries)
+2. **Injected** into the relevant agent's prompt on every future review:
+   ```
+   ## Feedback From Previous Reviews (consult BEFORE suggesting)
+   ### ❌ REJECTED — DO NOT suggest these again:
+     - [2026-03-21] "No rate limiting" (security/medium) — We have WAF for this
+   ### ✅ APPROVED — look for similar issues:
+     - [2026-03-21] "Missing MFA on admin panel" (security/high)
+   ```
+3. **Routed** to the correct agent by category (security findings → security_agent, etc.)
+
+The **Memory tab** shows a Feedback Loop dashboard with per-domain stats, capacity (n/30), and a clear-domain button to reset agent behavior.
+
+**The cycle (Module 09 pattern):**
+```
+Review → Findings → You approve/reject → Feedback JSON
+                                              ↓
+                          Next review: agent reads feedback first
+                                              ↓
+                          Agent skips rejected patterns
+                          Agent looks for more approved patterns
+                                              ↓
+                          30 reviews later: consolidate → lessons.md
+```
 
 ### Error Handling
 
@@ -374,6 +407,9 @@ arch-review-assistant/
 ├── src/arch_review/
 │   ├── engine.py              ← Single-agent review + SUPPORTED_MODELS
 │   ├── models.py              ← Pydantic models + _MODEL_PRICING + _model_cost()
+│   ├── feedback/
+│   │   ├── __init__.py
+│   │   └── store.py           ← FeedbackStore: FIFO-30, per-domain JSON, prompt injection
 │   ├── adr_generator.py       ← ADR generation engine
 │   ├── squad/
 │   │   ├── squad.py           ← 7-agent parallel orchestrator + RunMetrics
@@ -416,6 +452,7 @@ arch-review-assistant/
 - [x] Persistent API key storage per session
 - [x] Orange DNA design system
 - [x] Agent-specific think-bubbles (funny, 25 msgs per agent)
+- [x] **Feedback Loop** (Module 09 immune system) — 👍/👎 per finding, FIFO-30, prompt injection, Memory tab dashboard
 - [x] Diamond AR favicon (SVG inline string, Orange DNA `#F04E37`)
 - [x] Manager z-order fix — always rendered on top (2-pass render)
 - [x] Manager fast synchronized walk (17px/frame, ~2.7s total for 7 desks)
@@ -440,7 +477,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) — PRs welcome.
 git clone https://github.com/juliopessan/arch-review-assistant
 cd arch-review-assistant
 pip install -e ".[dev]"
-pytest  # 77 tests
+pytest  # 96 tests passing
 ```
 
 ---
