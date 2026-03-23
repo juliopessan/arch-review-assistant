@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html, io, os, re, sys, threading, zipfile, random
+from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
 
@@ -1212,19 +1213,69 @@ with tab_export:
     else:
         r: ReviewResult = st.session_state["review_result"]
         st.markdown(t("export.title"))
+
+        # ── Row 1: JSON + Markdown ─────────────────────────────────────────────
         e1, e2 = st.columns(2)
         with e1:
             st.markdown(t("export.json_desc"))
-            st.download_button("⬇️ review.json", r.model_dump_json(indent=2), "architecture-review.json","application/json", use_container_width=True)
+            st.download_button("⬇️ review.json", r.model_dump_json(indent=2),
+                               "architecture-review.json", "application/json",
+                               use_container_width=True)
         with e2:
             st.markdown(t("export.md_desc"))
-            st.download_button("⬇️ review.md", _build_md(r), "architecture-review.md","text/markdown", use_container_width=True)
+            st.download_button("⬇️ review.md", _build_md(r),
+                               "architecture-review.md", "text/markdown",
+                               use_container_width=True)
+
+        # ── Row 2: Enterprise PDF ──────────────────────────────────────────────
+        st.divider()
+        pdf_title = "📄 Enterprise PDF Report" if lang == "en" else "📄 Relatório PDF Enterprise"
+        pdf_desc  = (
+            "Orange DNA branded PDF — cover page, severity breakdown, "
+            "all findings with recommendations, opening questions, ADR list."
+            if lang == "en" else
+            "PDF com identidade Orange DNA — capa, breakdown de severidade, "
+            "todos os findings com recomendações, perguntas de abertura, lista de ADRs."
+        )
+        st.markdown(f"**{pdf_title}**")
+        st.caption(pdf_desc)
+
+        if st.button("⚙️ Generate PDF" if lang == "en" else "⚙️ Gerar PDF",
+                     type="primary", use_container_width=False):
+            with st.spinner("Building enterprise PDF..." if lang == "en"
+                            else "Gerando PDF enterprise..."):
+                try:
+                    from pdf_export import build_pdf
+                    pdf_bytes = build_pdf(r, lang=lang)
+                    st.session_state["pdf_bytes"] = pdf_bytes
+                except Exception as exc:
+                    st.error(f"PDF generation failed: {exc}")
+
+        if "pdf_bytes" in st.session_state:
+            now_str = datetime.now().strftime("%Y%m%d")
+            st.download_button(
+                "⬇️ Download PDF" if lang == "en" else "⬇️ Baixar PDF",
+                st.session_state["pdf_bytes"],
+                f"architecture-review-{now_str}.pdf",
+                "application/pdf",
+                use_container_width=False,
+                type="primary",
+            )
+            st.caption(
+                f"✓ PDF ready — {len(st.session_state['pdf_bytes']) // 1024} KB  ·  "
+                f"{r.summary.total_findings} findings  ·  Orange DNA design"
+            )
+
+        # ── ADRs ZIP ──────────────────────────────────────────────────────────
         if "adr_result" in st.session_state:
             st.divider()
             st.markdown(t("export.adr_title"))
             a = st.session_state["adr_result"]
-            st.download_button(f"⬇️ {a.total_generated} {t('export.adr_zip')}", _build_zip(a), "adrs.zip","application/zip", use_container_width=True)
+            st.download_button(f"⬇️ {a.total_generated} {t('export.adr_zip')}",
+                               _build_zip(a), "adrs.zip", "application/zip",
+                               use_container_width=True)
             st.caption(t("export.adr_hint"))
+
         st.divider()
         st.markdown(t("export.preview"))
         st.code(_build_md(r), language="markdown")
