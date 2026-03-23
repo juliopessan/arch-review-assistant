@@ -1,51 +1,46 @@
-"""Orange DNA — Enterprise PDF Report Generator.
+"""Orange DNA — Enterprise PDF Report Generator v2.
 
-Generates a fully branded PDF architecture review report using
-the Orange DNA design system (primary #F04E37, dark #2E2E2E).
+Full parity with the Markdown export. Every field the squad generates
+appears in the PDF — no data left behind.
 
 Sections:
-  1. Cover page — diamond logo + title + metadata
-  2. Executive Summary — severity stats + overall assessment
-  3. Opening Questions — senior architect questions
-  4. Findings — per-finding cards with severity pill + recommendation
-  5. Recommended ADRs — list of decision records to create
-  6. Footer — page numbers with Orange DNA bar
+  1. Cover            — diamond logo, title, date, model, severity stats
+  2. Executive Summary — overall assessment + top recommendations + stats table
+                         + domain distribution table
+  3. Opening Questions — all questions numbered
+  4. Findings by Domain — grouped by category, ordered by severity within domain
+                           each card: #N, severity pill, title, description,
+                           affected components, recommendation, ALL questions,
+                           references
+  5. Recommended ADRs  — numbered list
+  6. Appendix Index    — compact table all findings (ref# + title + sev + domain)
 """
 from __future__ import annotations
 
 import io
+from collections import defaultdict
 from datetime import datetime
-from typing import Optional
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import (
-    BaseDocTemplate,
-    Frame,
-    HRFlowable,
-    NextPageTemplate,
-    PageBreak,
-    PageTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
+    BaseDocTemplate, Frame, HRFlowable, KeepTogether,
+    NextPageTemplate, PageBreak, PageTemplate,
+    Paragraph, Spacer, Table, TableStyle,
 )
 from reportlab.platypus.flowables import Flowable
 
 # ── Orange DNA palette ────────────────────────────────────────────────────────
-ORANGE   = colors.HexColor("#F04E37")
-DARK     = colors.HexColor("#2E2E2E")
-TINT     = colors.HexColor("#FFF3F1")
-WARN_BG  = colors.HexColor("#FFE5DF")
-MUTED    = colors.HexColor("#666666")
-ROW_ALT  = colors.HexColor("#F5F5F5")
-SOFT     = colors.HexColor("#FF7A59")
-WHITE    = colors.white
-BLACK    = colors.black
+ORANGE  = colors.HexColor("#F04E37")
+DARK    = colors.HexColor("#2E2E2E")
+TINT    = colors.HexColor("#FFF3F1")
+MUTED   = colors.HexColor("#666666")
+ROW_ALT = colors.HexColor("#F5F5F5")
+WHITE   = colors.white
+BORDER  = colors.HexColor("#E0E0E0")
 
 SEV_COLORS = {
     "critical": colors.HexColor("#DC2626"),
@@ -54,380 +49,490 @@ SEV_COLORS = {
     "low":      colors.HexColor("#2563EB"),
     "info":     colors.HexColor("#6B7280"),
 }
-
-SEV_LABELS = {
-    "critical": "CRITICAL",
-    "high":     "HIGH",
-    "medium":   "MEDIUM",
-    "low":      "LOW",
-    "info":     "INFO",
+SEV_BG = {
+    "critical": colors.HexColor("#FEF2F2"),
+    "high":     colors.HexColor("#FFF7ED"),
+    "medium":   colors.HexColor("#FFFBEB"),
+    "low":      colors.HexColor("#EFF6FF"),
+    "info":     colors.HexColor("#F9FAFB"),
 }
 
+DOMAIN_ICONS = {
+    "security": "SEC", "reliability": "REL", "cost": "COST",
+    "observability": "OBS", "scalability": "SCALE",
+    "performance": "PERF", "maintainability": "MAINT",
+    "missing_adr": "ADR", "trade_off": "TRADE", "risk": "RISK",
+}
+DOMAIN_ORDER = [
+    "security", "reliability", "cost", "observability",
+    "scalability", "performance", "maintainability",
+    "missing_adr", "trade_off", "risk",
+]
+
 PAGE_W, PAGE_H = A4
-MARGIN = 2.0 * cm
+MARGIN    = 2.0 * cm
+CONTENT_W = PAGE_W - 2 * MARGIN
 
 
-# ── Diamond logo flowable ─────────────────────────────────────────────────────
-
+# ── Diamond logo ──────────────────────────────────────────────────────────────
 class DiamondLogo(Flowable):
-    """Orange DNA diamond (AR) — SVG-inspired drawn via ReportLab canvas."""
-
-    def __init__(self, size: float = 80):
+    def __init__(self, size=80):
         super().__init__()
         self.size = size
-        self.width  = size
-        self.height = size
+        self.width = self.height = size
 
     def draw(self):
         c = self.canv
         s = self.size
         cx, cy = s / 2, s / 2
 
-        def diamond_path(pts_flat):
+        def poly(pts):
             p = c.beginPath()
-            p.moveTo(pts_flat[0], pts_flat[1])
-            for i in range(2, len(pts_flat), 2):
-                p.lineTo(pts_flat[i], pts_flat[i+1])
+            p.moveTo(pts[0], pts[1])
+            for i in range(2, len(pts), 2):
+                p.lineTo(pts[i], pts[i+1])
             p.close()
             return p
 
-        # Diamond base
         c.setFillColor(ORANGE)
-        c.setStrokeColor(ORANGE)
-        base = diamond_path([cx, s-2, s-2, cy, cx, 2, 2, cy])
-        c.drawPath(base, fill=1, stroke=0)
-
-        # Top-right highlight
+        c.drawPath(poly([cx, s-2, s-2, cy, cx, 2, 2, cy]), fill=1, stroke=0)
         c.setFillColor(colors.HexColor("#FF7A59"))
         c.setFillAlpha(0.35)
-        hi = diamond_path([cx, s-2, s-2, cy, cx, cy])
-        c.drawPath(hi, fill=1, stroke=0)
+        c.drawPath(poly([cx, s-2, s-2, cy, cx, cy]), fill=1, stroke=0)
         c.setFillAlpha(1.0)
-
-        # Top-left shadow
         c.setFillColor(colors.HexColor("#C03020"))
         c.setFillAlpha(0.25)
-        sh = diamond_path([cx, s-2, 2, cy, cx, cy])
-        c.drawPath(sh, fill=1, stroke=0)
+        c.drawPath(poly([cx, s-2, 2, cy, cx, cy]), fill=1, stroke=0)
         c.setFillAlpha(1.0)
-
-        # "AR" text
         c.setFillColor(WHITE)
         c.setFont("Helvetica-Bold", s * 0.28)
         c.drawCentredString(cx, cy - s * 0.09, "AR")
 
 
-# ── Page templates ────────────────────────────────────────────────────────────
-
+# ── Page decorators ───────────────────────────────────────────────────────────
 def _draw_cover(canvas, doc):
-    """Cover page: full orange top bar + bottom bar."""
     canvas.saveState()
-    # Top orange bar
     canvas.setFillColor(ORANGE)
-    canvas.rect(0, PAGE_H - 14 * mm, PAGE_W, 14 * mm, fill=1, stroke=0)
-    # Bottom orange bar
-    canvas.setFillColor(ORANGE)
-    canvas.rect(0, 0, PAGE_W, 10 * mm, fill=1, stroke=0)
+    canvas.rect(0, PAGE_H - 14*mm, PAGE_W, 14*mm, fill=1, stroke=0)
+    canvas.setFillColor(DARK)
+    canvas.rect(0, 0, PAGE_W, 10*mm, fill=1, stroke=0)
     canvas.restoreState()
 
 
 def _draw_page(canvas, doc):
-    """Normal page header + footer with Orange DNA lines."""
     canvas.saveState()
-    y_header = PAGE_H - MARGIN + 4 * mm
-
-    # Header line
+    yt = PAGE_H - MARGIN + 3*mm
     canvas.setStrokeColor(ORANGE)
     canvas.setLineWidth(1.5)
-    canvas.line(MARGIN, y_header, PAGE_W - MARGIN, y_header)
-
-    # Header text
+    canvas.line(MARGIN, yt, PAGE_W - MARGIN, yt)
+    canvas.setFont("Helvetica-Bold", 8)
+    canvas.setFillColor(ORANGE)
+    canvas.drawString(MARGIN, yt + 3*mm, "ARCHITECTURE REVIEW")
     canvas.setFont("Helvetica", 8)
-    canvas.setFillColor(DARK)
-    canvas.drawString(MARGIN, y_header + 3 * mm, "Architecture Review Report")
     canvas.setFillColor(MUTED)
-    ts = datetime.now().strftime("%B %Y")
-    canvas.drawRightString(PAGE_W - MARGIN, y_header + 3 * mm, ts)
-
-    # Footer line
-    y_footer = MARGIN - 8 * mm
+    canvas.drawString(MARGIN + 4.2*cm, yt + 3*mm, "— Orange DNA")
+    canvas.drawRightString(PAGE_W - MARGIN, yt + 3*mm,
+                           datetime.now().strftime("%B %Y"))
+    yb = MARGIN - 6*mm
     canvas.setStrokeColor(ORANGE)
-    canvas.line(MARGIN, y_footer + 4 * mm, PAGE_W - MARGIN, y_footer + 4 * mm)
-
-    # Footer text
+    canvas.line(MARGIN, yb + 4*mm, PAGE_W - MARGIN, yb + 4*mm)
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(MUTED)
-    canvas.drawString(MARGIN, y_footer, "Orange DNA — Architecture Review")
-    canvas.drawRightString(PAGE_W - MARGIN, y_footer,
-                           f"Page {doc.page}")
+    canvas.drawString(MARGIN, yb, "Confidential — Architecture Review Report")
+    canvas.drawRightString(PAGE_W - MARGIN, yb, f"Page {doc.page}")
     canvas.restoreState()
 
 
-# ── Style helpers ─────────────────────────────────────────────────────────────
-
-def _styles():
-    base = getSampleStyleSheet()
-
-    def s(name, **kw):
-        defaults = dict(fontName="Helvetica", fontSize=10, leading=14,
-                        textColor=DARK, spaceAfter=4)
-        defaults.update(kw)
-        return ParagraphStyle(name=name, **defaults)
+# ── Styles ────────────────────────────────────────────────────────────────────
+def _S():
+    def ps(name, **kw):
+        d = dict(fontName="Helvetica", fontSize=10, leading=14,
+                 textColor=DARK, spaceAfter=4)
+        d.update(kw)
+        return ParagraphStyle(name=name, **d)
 
     return {
-        "cover_title":   s("ct", fontName="Helvetica-Bold", fontSize=28,
-                           textColor=DARK, leading=34, spaceAfter=8),
-        "cover_sub":     s("cs", fontName="Helvetica", fontSize=13,
-                           textColor=MUTED, leading=18, spaceAfter=6),
-        "cover_meta":    s("cm", fontName="Helvetica", fontSize=10,
-                           textColor=MUTED, leading=14, spaceAfter=4),
-        "h1":            s("h1", fontName="Helvetica-Bold", fontSize=16,
-                           textColor=ORANGE, leading=20, spaceBefore=14, spaceAfter=6),
-        "h2":            s("h2", fontName="Helvetica-Bold", fontSize=12,
-                           textColor=DARK, leading=16, spaceBefore=10, spaceAfter=4),
-        "body":          s("body", fontSize=10, leading=15, spaceAfter=6),
-        "body_muted":    s("bm", fontSize=9, textColor=MUTED, leading=13, spaceAfter=3),
-        "finding_title": s("ft", fontName="Helvetica-Bold", fontSize=11,
-                           textColor=DARK, leading=15, spaceAfter=3),
-        "label":         s("lb", fontName="Helvetica-Bold", fontSize=9,
-                           textColor=ORANGE, leading=12, spaceAfter=2),
-        "rec":           s("rc", fontName="Helvetica-Oblique", fontSize=10,
-                           textColor=DARK, leading=14, spaceAfter=4),
-        "question":      s("q", fontSize=9, textColor=MUTED, leading=13,
-                           leftIndent=12, spaceAfter=2),
-        "toc_h":         s("th", fontName="Helvetica-Bold", fontSize=9,
-                           textColor=WHITE, leading=12),
-        "table_cell":    s("tc", fontSize=9, leading=13, spaceAfter=2),
-        "table_cell_c":  s("tcc", fontSize=9, leading=13, alignment=TA_CENTER),
+        "cover_title": ps("ct", fontName="Helvetica-Bold", fontSize=30,
+                          textColor=DARK, leading=36, spaceAfter=4),
+        "cover_orange": ps("co", fontName="Helvetica-Bold", fontSize=30,
+                           textColor=ORANGE, leading=36, spaceAfter=14),
+        "cover_sub":   ps("cs", fontSize=13, textColor=MUTED, leading=18, spaceAfter=4),
+        "cover_meta":  ps("cm", fontSize=10, textColor=MUTED, leading=14),
+        "h1":          ps("h1", fontName="Helvetica-Bold", fontSize=15,
+                          textColor=ORANGE, leading=19, spaceBefore=14, spaceAfter=4),
+        "h2":          ps("h2", fontName="Helvetica-Bold", fontSize=12,
+                          textColor=DARK, leading=16, spaceBefore=10, spaceAfter=4),
+        "body":        ps("body", fontSize=10, leading=15, spaceAfter=4),
+        "muted":       ps("muted", fontSize=9, textColor=MUTED, leading=13, spaceAfter=2),
+        "ft":          ps("ft", fontName="Helvetica-Bold", fontSize=11,
+                          textColor=DARK, leading=15, spaceAfter=3),
+        "label":       ps("lbl", fontName="Helvetica-Bold", fontSize=9,
+                          textColor=ORANGE, leading=12, spaceAfter=1),
+        "rec":         ps("rec", fontSize=10, textColor=DARK, leading=15, spaceAfter=4),
+        "q":           ps("q", fontSize=9, textColor=MUTED, leading=13,
+                          leftIndent=8, spaceAfter=1),
+        "ref":         ps("ref", fontName="Helvetica-Oblique", fontSize=8,
+                          textColor=MUTED, leading=11, leftIndent=8, spaceAfter=1),
+        "toc_h":       ps("toch", fontName="Helvetica-Bold", fontSize=9,
+                          textColor=WHITE, leading=12, alignment=TA_CENTER),
+        "toc":         ps("toc", fontSize=8, leading=12, spaceAfter=0),
+        "toc_c":       ps("tocc", fontSize=8, leading=12, spaceAfter=0,
+                          alignment=TA_CENTER),
+        "footer":      ps("fn", fontSize=8, textColor=MUTED,
+                          alignment=TA_CENTER, leading=12),
     }
 
 
 def _rule():
-    return HRFlowable(width="100%", thickness=1.5, color=ORANGE, spaceAfter=8, spaceBefore=4)
+    return HRFlowable(width="100%", thickness=1.5, color=ORANGE,
+                      spaceAfter=6, spaceBefore=2)
 
 
-def _sev_pill(severity: str) -> str:
-    col = SEV_COLORS.get(severity, DARK)
-    label = SEV_LABELS.get(severity, severity.upper())
-    hex_col = col.hexval() if hasattr(col, 'hexval') else "#666666"
-    return f'<font color="{hex_col}"><b>[{label}]</b></font>'
-
-
-# ── Main builder ──────────────────────────────────────────────────────────────
-
+# ── Main ─────────────────────────────────────────────────────────────────────
 def build_pdf(review_result, lang: str = "en") -> bytes:
-    """Build Orange DNA enterprise PDF. Returns bytes ready for st.download_button."""
-    buf = io.BytesIO()
-    st = _styles()
+    buf  = io.BytesIO()
+    ST   = _S()
+    r    = review_result
+    s    = r.summary
+    now  = datetime.now().strftime("%B %d, %Y")
+    total = s.total_findings or 1
 
     doc = BaseDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=MARGIN + 6 * mm,
-        bottomMargin=MARGIN + 6 * mm,
+        buf, pagesize=A4,
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=MARGIN + 8*mm, bottomMargin=MARGIN + 8*mm,
         title="Architecture Review Report",
         author="Orange DNA — Architecture Review",
     )
-
-    cover_frame  = Frame(0, 0, PAGE_W, PAGE_H, leftPadding=3*cm,
-                         rightPadding=3*cm, topPadding=5*cm, bottomPadding=3*cm, id="cover")
-    normal_frame = Frame(MARGIN, MARGIN + 8*mm, PAGE_W - 2*MARGIN,
-                         PAGE_H - 2*MARGIN - 16*mm, id="normal")
-
+    cover_frame  = Frame(0, 0, PAGE_W, PAGE_H,
+                         leftPadding=3*cm, rightPadding=3*cm,
+                         topPadding=5*cm, bottomPadding=3*cm, id="cover")
+    normal_frame = Frame(MARGIN, MARGIN + 10*mm,
+                         CONTENT_W, PAGE_H - 2*MARGIN - 20*mm, id="normal")
     doc.addPageTemplates([
         PageTemplate(id="Cover",  frames=[cover_frame],  onPage=_draw_cover),
         PageTemplate(id="Normal", frames=[normal_frame], onPage=_draw_page),
     ])
 
-    r   = review_result
-    s   = r.summary
-    now = datetime.now().strftime("%B %d, %Y")
     story = []
 
     # ── COVER ─────────────────────────────────────────────────────────────────
-    story.append(Spacer(1, 1.5 * cm))
-    story.append(DiamondLogo(size=90))
-    story.append(Spacer(1, 1.2 * cm))
-    story.append(Paragraph("Architecture", st["cover_title"]))
-    story.append(Paragraph("Review Report", ParagraphStyle(
-        "cth", fontName="Helvetica-Bold", fontSize=28, textColor=ORANGE,
-        leading=34, spaceAfter=20)))
-    story.append(Spacer(1, 0.6 * cm))
-    story.append(Paragraph(f"Generated {now}", st["cover_sub"]))
-    story.append(Paragraph(f"Model: {r.model_used}", st["cover_meta"]))
-    story.append(Spacer(1, 0.8 * cm))
-
-    # Stats bar on cover
-    sev_data = [
-        ["🔴 Critical", "🟠 High", "🟡 Medium", "🔵 Low", "⚪ Info", "Total"],
-        [str(s.critical_count), str(s.high_count), str(s.medium_count),
-         str(s.low_count), str(s.info_count), str(s.total_findings)],
+    story += [
+        Spacer(1, 1.4*cm), DiamondLogo(88), Spacer(1, 1*cm),
+        Paragraph("Architecture", ST["cover_title"]),
+        Paragraph("Review Report", ST["cover_orange"]),
+        Paragraph(f"Generated {now}", ST["cover_sub"]),
+        Paragraph(f"Model: {r.model_used}", ST["cover_meta"]),
+        Spacer(1, 0.7*cm),
     ]
-    col_w = (PAGE_W - 6*cm) / 6
-    cover_table = Table(sev_data, colWidths=[col_w] * 6, rowHeights=[18, 22])
-    cover_table.setStyle(TableStyle([
-        ("BACKGROUND",  (0, 0), (-1, 0), DARK),
-        ("TEXTCOLOR",   (0, 0), (-1, 0), WHITE),
-        ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE",    (0, 0), (-1, 0), 8),
-        ("BACKGROUND",  (0, 1), (-1, 1), TINT),
-        ("TEXTCOLOR",   (0, 1), (-1, 1), DARK),
-        ("FONTNAME",    (0, 1), (-1, 1), "Helvetica-Bold"),
-        ("FONTSIZE",    (0, 1), (-1, 1), 12),
-        ("ALIGN",       (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID",        (0, 0), (-1, -1), 0.5, colors.HexColor("#E0E0E0")),
-        ("ROUNDEDCORNERS", [4]),
+
+    cw = (PAGE_W - 6*cm) / 6
+    def _ch(t): return Paragraph(t, ParagraphStyle("", fontName="Helvetica-Bold",
+        fontSize=8, textColor=WHITE, alignment=TA_CENTER, leading=11))
+    def _cv(v): return Paragraph(str(v), ParagraphStyle("", fontName="Helvetica-Bold",
+        fontSize=14, textColor=DARK, alignment=TA_CENTER, leading=17))
+    cover_tbl = Table(
+        [[_ch("🔴 Critical"), _ch("🟠 High"), _ch("🟡 Medium"),
+          _ch("🔵 Low"), _ch("⚪ Info"), _ch("Total")],
+         [_cv(s.critical_count), _cv(s.high_count), _cv(s.medium_count),
+          _cv(s.low_count), _cv(s.info_count), _cv(s.total_findings)]],
+        colWidths=[cw]*6, rowHeights=[16, 24],
+    )
+    cover_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("BACKGROUND", (0, 1), (-1, 1), TINT),
+        ("GRID",       (0, 0), (-1, -1), 0.5, BORDER),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
     ]))
-    story.append(cover_table)
-    story.append(NextPageTemplate("Normal"))
-    story.append(PageBreak())
+    story += [cover_tbl, NextPageTemplate("Normal"), PageBreak()]
 
     # ── EXECUTIVE SUMMARY ─────────────────────────────────────────────────────
-    story.append(Paragraph("EXECUTIVE SUMMARY", st["h1"]))
-    story.append(_rule())
+    story += [Paragraph("EXECUTIVE SUMMARY", ST["h1"]), _rule()]
 
     if s.overall_assessment:
-        story.append(Paragraph(s.overall_assessment, st["body"]))
-        story.append(Spacer(1, 0.4 * cm))
+        story += [Paragraph(s.overall_assessment, ST["body"]), Spacer(1, 0.3*cm)]
 
-    # Severity breakdown table
-    sev_rows = [
-        [Paragraph("Severity", st["toc_h"]),
-         Paragraph("Count", st["toc_h"]),
-         Paragraph("% of Total", st["toc_h"])],
-    ]
-    total = s.total_findings or 1
-    for sev, count in [
-        ("Critical", s.critical_count), ("High", s.high_count),
-        ("Medium", s.medium_count),     ("Low",  s.low_count),
-        ("Info",   s.info_count),
-    ]:
-        pct = f"{count / total * 100:.0f}%"
-        col = SEV_COLORS.get(sev.lower(), DARK)
+    if getattr(s, "top_recommendations", None):
+        story.append(Paragraph("Top Recommendations" if lang=="en"
+                                else "Principais Recomendações", ST["h2"]))
+        for i, rec in enumerate(s.top_recommendations, 1):
+            story.append(Paragraph(f"<b>{i}.</b>  {rec}", ST["body"]))
+        story.append(Spacer(1, 0.3*cm))
+
+    # Severity table
+    sev_rows = [[Paragraph("Severity", ST["toc_h"]),
+                 Paragraph("Count", ST["toc_h"]),
+                 Paragraph("% of Total", ST["toc_h"])]]
+    for name, count in [("Critical", s.critical_count), ("High", s.high_count),
+                         ("Medium", s.medium_count), ("Low", s.low_count),
+                         ("Info", s.info_count)]:
+        col = SEV_COLORS.get(name.lower(), DARK)
         sev_rows.append([
-            Paragraph(f'<font color="{col.hexval()}"><b>{sev}</b></font>', st["table_cell"]),
-            Paragraph(f"<b>{count}</b>", ParagraphStyle("", alignment=TA_CENTER, fontSize=9, leading=13)),
-            Paragraph(pct, ParagraphStyle("", alignment=TA_CENTER, fontSize=9, leading=13)),
+            Paragraph(f'<font color="{col.hexval()}"><b>{name}</b></font>', ST["toc"]),
+            Paragraph(f"<b>{count}</b>",
+                      ParagraphStyle("", fontName="Helvetica-Bold", fontSize=9,
+                                     leading=12, alignment=TA_CENTER)),
+            Paragraph(f"{count/total*100:.0f}%",
+                      ParagraphStyle("", fontSize=9, leading=12, alignment=TA_CENTER)),
         ])
     sev_rows.append([
-        Paragraph("<b>Total</b>", st["table_cell"]),
-        Paragraph(f"<b>{s.total_findings}</b>", ParagraphStyle("", alignment=TA_CENTER, fontSize=9, leading=13, fontName="Helvetica-Bold")),
-        Paragraph("100%", ParagraphStyle("", alignment=TA_CENTER, fontSize=9, leading=13)),
+        Paragraph("<b>Total</b>", ST["toc"]),
+        Paragraph(f'<font color="{ORANGE.hexval()}"><b>{s.total_findings}</b></font>',
+                  ParagraphStyle("", fontName="Helvetica-Bold", fontSize=9,
+                                 leading=12, alignment=TA_CENTER)),
+        Paragraph("100%", ParagraphStyle("", fontSize=9, leading=12, alignment=TA_CENTER)),
     ])
-
-    sev_table = Table(sev_rows, colWidths=[9*cm, 3*cm, 3*cm], rowHeights=18)
-    sev_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), DARK),
-        ("BACKGROUND", (0, -1), (-1, -1), TINT),
-        ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#E0E0E0")),
-        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [WHITE, ROW_ALT]),
+    sev_tbl = Table(sev_rows, colWidths=[9*cm, 3*cm, 3*cm], rowHeights=18)
+    sev_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0), DARK),
+        ("BACKGROUND",    (0, -1), (-1, -1), TINT),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -2), [WHITE, ROW_ALT]),
+        ("GRID",          (0, 0), (-1, -1), 0.5, BORDER),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
-    story.append(sev_table)
-    story.append(Spacer(1, 0.5 * cm))
+    story.append(sev_tbl)
+
+    # Domain distribution
+    domain_counts: dict[str, int] = defaultdict(int)
+    for f in r.findings:
+        domain_counts[f.category.value] += 1
+
+    story += [Spacer(1, 0.4*cm),
+              Paragraph("Findings by Domain" if lang=="en"
+                         else "Findings por Domínio", ST["h2"])]
+    dom_rows = [[Paragraph("Domain", ST["toc_h"]),
+                 Paragraph("Count", ST["toc_h"]),
+                 Paragraph("Critical + High", ST["toc_h"])]]
+    for dom in DOMAIN_ORDER:
+        cnt = domain_counts.get(dom, 0)
+        if not cnt:
+            continue
+        ch = sum(1 for f in r.findings
+                 if f.category.value == dom and f.severity.value in ("critical","high"))
+        icon = DOMAIN_ICONS.get(dom, "•")
+        dom_rows.append([
+            Paragraph(f"{icon}  {dom.replace('_',' ').title()}", ST["toc"]),
+            Paragraph(str(cnt), ParagraphStyle("", fontSize=9, leading=12, alignment=TA_CENTER)),
+            Paragraph(f'<font color="{SEV_COLORS["high"].hexval()}"><b>{ch}</b></font>'
+                      if ch else "0",
+                      ParagraphStyle("", fontSize=9, leading=12, alignment=TA_CENTER)),
+        ])
+    dom_tbl = Table(dom_rows, colWidths=[9*cm, 3*cm, 3*cm], rowHeights=18)
+    dom_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, 0), DARK),
+        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, ROW_ALT]),
+        ("GRID",          (0, 0), (-1, -1), 0.5, BORDER),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",    (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story += [dom_tbl, Spacer(1, 0.4*cm)]
 
     # ── OPENING QUESTIONS ─────────────────────────────────────────────────────
     if r.senior_architect_questions:
-        story.append(Paragraph("OPENING QUESTIONS", st["h1"]))
-        story.append(_rule())
-        story.append(Paragraph(
-            "Questions a senior architect should ask before proceeding:",
-            st["body_muted"]))
-        story.append(Spacer(1, 0.2 * cm))
+        story += [
+            Paragraph("OPENING QUESTIONS" if lang=="en"
+                       else "PERGUNTAS DE ABERTURA", ST["h1"]),
+            _rule(),
+            Paragraph("Questions a senior architect should ask before proceeding:"
+                       if lang=="en"
+                       else "Perguntas que um arquiteto sênior deve fazer antes de prosseguir:",
+                       ST["muted"]),
+            Spacer(1, 0.2*cm),
+        ]
         for i, q in enumerate(r.senior_architect_questions, 1):
-            story.append(Paragraph(f"{i}.  {q}", st["body"]))
-        story.append(Spacer(1, 0.3 * cm))
+            story.append(Paragraph(f"<b>{i}.</b>  {q}", ST["body"]))
+        story.append(Spacer(1, 0.3*cm))
 
-    # ── FINDINGS ──────────────────────────────────────────────────────────────
-    story.append(Paragraph("FINDINGS", st["h1"]))
-    story.append(_rule())
-    story.append(Paragraph(
-        f"{s.total_findings} findings across {len(set(f.category for f in r.findings))} "
-        f"domains — ordered by severity.",
-        st["body_muted"]))
-    story.append(Spacer(1, 0.3 * cm))
+    # ── FINDINGS BY DOMAIN ────────────────────────────────────────────────────
+    story += [Paragraph("FINDINGS", ST["h1"]), _rule()]
 
-    sev_order = ["critical", "high", "medium", "low", "info"]
-    sorted_findings = sorted(r.findings,
-                             key=lambda f: sev_order.index(f.severity.value)
-                             if f.severity.value in sev_order else 99)
+    domains_present = [d for d in DOMAIN_ORDER if d in domain_counts]
+    for d in domain_counts:
+        if d not in domains_present:
+            domains_present.append(d)
 
-    for idx, finding in enumerate(sorted_findings):
-        sev   = finding.severity.value
-        col   = SEV_COLORS.get(sev, DARK)
-        cat   = finding.category.value.replace("_", " ").upper()
+    sev_order  = ["critical", "high", "medium", "low", "info"]
+    finding_no = 0
 
-        # Finding card — inner table with orange left accent
-        card_rows = []
+    for domain in domains_present:
+        dom_findings = sorted(
+            [f for f in r.findings if f.category.value == domain],
+            key=lambda f: sev_order.index(f.severity.value)
+            if f.severity.value in sev_order else 99
+        )
+        if not dom_findings:
+            continue
 
-        # Title row
-        card_rows.append([
-            Paragraph(
-                f'<font color="{col.hexval()}"><b>[{sev.upper()}]</b></font>'
-                f'  <b>{finding.title}</b>  '
-                f'<font color="#666666" size="8">{cat}</font>',
-                st["finding_title"]
-            )
-        ])
+        crit_high = sum(1 for f in dom_findings
+                        if f.severity.value in ("critical","high"))
+        label     = domain.replace("_", " ").upper()
+        badge     = DOMAIN_ICONS.get(domain, "•")
 
-        # Description
-        card_rows.append([Paragraph(finding.description, st["body"])])
-
-        if finding.affected_components:
-            comps = ", ".join(finding.affected_components)
-            card_rows.append([
-                Paragraph(f'<font color="{ORANGE.hexval()}"><b>Affected:</b></font>  {comps}',
-                          st["body_muted"])
-            ])
-
-        # Recommendation
-        card_rows.append([
-            Paragraph(f'<font color="{ORANGE.hexval()}"><b>Recommendation:</b></font>  '
-                      f'{finding.recommendation}', st["body"])
-        ])
-
-        if finding.questions_to_ask:
-            qs = "  ·  ".join(finding.questions_to_ask[:3])
-            card_rows.append([Paragraph(f"<i>Q: {qs}</i>", st["question"])])
-
-        card_table = Table(card_rows, colWidths=[PAGE_W - 2*MARGIN - 8*mm])
-        bg = WARN_BG if sev == "critical" else (TINT if sev == "high" else WHITE)
-        card_table.setStyle(TableStyle([
-            ("BACKGROUND",   (0, 0), (-1, -1), bg),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 10),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING",   (0, 0), (0, 0),   8),
-            ("BOTTOMPADDING",(0, -1),(0, -1),  8),
-            ("LINEBEFORE",   (0, 0), (-1, -1), 4, col),
-            ("ROUNDEDCORNERS", [3]),
+        # Domain section header
+        hdr_tbl = Table([[
+            Paragraph(f"{badge}  {label}",
+                      ParagraphStyle("dh", fontName="Helvetica-Bold", fontSize=11,
+                                     textColor=WHITE, leading=15)),
+            Paragraph(f"{len(dom_findings)} findings"
+                       + (f"  ·  {crit_high} critical/high" if crit_high else ""),
+                       ParagraphStyle("dc", fontSize=9, textColor=WHITE,
+                                      leading=13, alignment=TA_RIGHT)),
+        ]], colWidths=[CONTENT_W*0.62, CONTENT_W*0.38], rowHeights=22)
+        hdr_tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), DARK),
+            ("LEFTPADDING", (0,0), (0,-1), 10),
+            ("RIGHTPADDING", (-1,0), (-1,-1), 10),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("LINEBEFORE", (0,0), (0,-1), 4, ORANGE),
         ]))
-        story.append(card_table)
-        story.append(Spacer(1, 0.25 * cm))
+        story += [Spacer(1, 0.3*cm), hdr_tbl, Spacer(1, 0.12*cm)]
+
+        for finding in dom_findings:
+            finding_no += 1
+            sev = finding.severity.value
+            col = SEV_COLORS.get(sev, DARK)
+            bg  = SEV_BG.get(sev, WHITE)
+
+            rows = []
+
+            # Title
+            rows.append([Paragraph(
+                f'<font color="{MUTED.hexval()}" size="8"><b>#{finding_no:02d}</b></font>  '
+                f'<font color="{col.hexval()}"><b>[{sev.upper()}]</b></font>  '
+                f'<b>{finding.title}</b>',
+                ST["ft"]
+            )])
+
+            # Description
+            rows.append([Paragraph(finding.description, ST["body"])])
+
+            # Affected
+            if finding.affected_components:
+                rows.append([Paragraph(
+                    f'<font color="{ORANGE.hexval()}"><b>Affected:</b></font>  '
+                    + "  ·  ".join(finding.affected_components),
+                    ST["muted"]
+                )])
+
+            # Recommendation
+            rows.append([Paragraph(
+                f'<font color="{ORANGE.hexval()}"><b>Recommendation:</b></font>',
+                ST["label"])])
+            rows.append([Paragraph(finding.recommendation, ST["rec"])])
+
+            # All questions
+            if finding.questions_to_ask:
+                rows.append([Paragraph(
+                    '<b>Questions to ask:</b>',
+                    ParagraphStyle("", fontName="Helvetica-Bold", fontSize=9,
+                                   textColor=DARK, leading=12, spaceAfter=2)
+                )])
+                for q in finding.questions_to_ask:
+                    rows.append([Paragraph(f"→  {q}", ST["q"])])
+
+            # References
+            if finding.references:
+                rows.append([Paragraph(
+                    '<b>References:</b>',
+                    ParagraphStyle("", fontName="Helvetica-Bold", fontSize=8,
+                                   textColor=MUTED, leading=11, spaceAfter=1)
+                )])
+                for ref in finding.references:
+                    rows.append([Paragraph(f"• {ref}", ST["ref"])])
+
+            card = Table(rows, colWidths=[CONTENT_W - 6*mm])
+            card.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0), (-1,-1), bg),
+                ("LEFTPADDING",   (0,0), (-1,-1), 10),
+                ("RIGHTPADDING",  (0,0), (-1,-1), 8),
+                ("TOPPADDING",    (0,0), (0,0),   8),
+                ("BOTTOMPADDING", (0,-1),(0,-1),  8),
+                ("TOPPADDING",    (0,1), (-1,-1), 2),
+                ("BOTTOMPADDING", (0,0), (-1,-2), 2),
+                ("LINEBEFORE",    (0,0), (-1,-1), 4, col),
+            ]))
+            story.append(KeepTogether([card, Spacer(1, 0.18*cm)]))
 
     # ── RECOMMENDED ADRs ──────────────────────────────────────────────────────
     if r.recommended_adrs:
-        story.append(Spacer(1, 0.3 * cm))
-        story.append(Paragraph("RECOMMENDED ADRs", st["h1"]))
-        story.append(_rule())
-        story.append(Paragraph(
-            "These decisions should be documented as Architecture Decision Records:",
-            st["body_muted"]))
-        story.append(Spacer(1, 0.2 * cm))
+        story += [
+            Spacer(1, 0.3*cm),
+            Paragraph("RECOMMENDED ADRs" if lang=="en" else "ADRs RECOMENDADOS", ST["h1"]),
+            _rule(),
+            Paragraph("These architectural decisions should be documented as ADRs:"
+                       if lang=="en"
+                       else "Estas decisões devem ser documentadas como ADRs:",
+                       ST["muted"]),
+            Spacer(1, 0.2*cm),
+        ]
         for i, adr in enumerate(r.recommended_adrs, 1):
-            story.append(Paragraph(f"<b>{i}.</b>  {adr}", st["body"]))
-        story.append(Spacer(1, 0.3 * cm))
+            story.append(Paragraph(f"<b>{i}.</b>  {adr}", ST["body"]))
 
-    # ── BACK COVER STRIP ──────────────────────────────────────────────────────
-    story.append(Spacer(1, 0.5 * cm))
-    story.append(_rule())
-    story.append(Paragraph(
-        f"Generated by Orange DNA Architecture Review  ·  {now}  ·  {r.model_used}",
-        ParagraphStyle("footer_note", fontName="Helvetica", fontSize=8,
-                       textColor=MUTED, alignment=TA_CENTER, leading=12)
-    ))
+    # ── APPENDIX: FINDING INDEX ───────────────────────────────────────────────
+    story += [
+        PageBreak(),
+        Paragraph("APPENDIX — FINDINGS INDEX" if lang=="en"
+                   else "APÊNDICE — ÍNDICE DE FINDINGS", ST["h1"]),
+        _rule(),
+        Paragraph("Quick reference for all findings in this report."
+                   if lang=="en"
+                   else "Referência rápida de todos os findings neste relatório.",
+                   ST["muted"]),
+        Spacer(1, 0.3*cm),
+    ]
+
+    idx_rows = [[
+        Paragraph("#",        ST["toc_h"]),
+        Paragraph("Finding",  ST["toc_h"]),
+        Paragraph("Severity", ST["toc_h"]),
+        Paragraph("Domain",   ST["toc_h"]),
+    ]]
+    n = 0
+    for domain in domains_present:
+        for finding in sorted(
+            [f for f in r.findings if f.category.value == domain],
+            key=lambda f: sev_order.index(f.severity.value)
+            if f.severity.value in sev_order else 99
+        ):
+            n += 1
+            col = SEV_COLORS.get(finding.severity.value, DARK)
+            idx_rows.append([
+                Paragraph(f"#{n:02d}",
+                          ParagraphStyle("", fontSize=8, leading=11, alignment=TA_CENTER)),
+                Paragraph(finding.title,
+                          ParagraphStyle("", fontSize=8, leading=11)),
+                Paragraph(f'<font color="{col.hexval()}"><b>{finding.severity.value.upper()}</b></font>',
+                          ParagraphStyle("", fontSize=8, leading=11, alignment=TA_CENTER)),
+                Paragraph(domain.replace("_"," ").title(),
+                          ParagraphStyle("", fontSize=8, leading=11)),
+            ])
+
+    idx_tbl = Table(idx_rows,
+                    colWidths=[1.2*cm, CONTENT_W - 7.2*cm, 2.5*cm, 3.5*cm],
+                    repeatRows=1)
+    idx_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,0), DARK),
+        ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, ROW_ALT]),
+        ("GRID",          (0,0), (-1,-1), 0.4, BORDER),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",    (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("LEFTPADDING",   (0,0), (-1,-1), 5),
+    ]))
+    story.append(idx_tbl)
+
+    # Closing strip
+    story += [
+        Spacer(1, 0.5*cm), _rule(),
+        Paragraph(
+            f"Orange DNA Architecture Review  ·  {now}  ·  {r.model_used}  ·  "
+            f"{s.total_findings} findings",
+            ST["footer"]
+        )
+    ]
 
     doc.build(story)
     buf.seek(0)
