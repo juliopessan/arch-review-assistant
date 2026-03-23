@@ -333,6 +333,7 @@ Via [LiteLLM](https://docs.litellm.ai/docs/providers). Model and API key are sel
 |-------|-------|
 | `gpt-4o` | Strong reasoning |
 | `gpt-4o-mini` | Budget option |
+| `gpt-5.4-nano` | Ultra-cheap OCR & high-volume pipelines · $0.20/$1.25 per 1M |
 
 ### Mistral
 

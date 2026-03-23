@@ -32,8 +32,9 @@ SUPPORTED_MODELS = {
     "claude-opus-4-20250514":    "anthropic",
     "claude-haiku-4-5-20251001": "anthropic",
     # ── OpenAI ─────────────────────────────────────────────────────────────────
-    "gpt-4o":      "openai",
-    "gpt-4o-mini": "openai",
+    "gpt-4o":           "openai",
+    "gpt-4o-mini":      "openai",
+    "gpt-5.4-nano":     "openai",   # Ultra-cheap OCR / high-volume pipelines $0.20/$1.25 per 1M
     # ── Google ─────────────────────────────────────────────────────────────────
     "gemini/gemini-3.1-pro-preview":   "google",  # Flagship — Gemini 3.1 Pro (latest, Mar 2026)
     "gemini/gemini-3.1-flash-preview": "google",  # Fast — Gemini 3.1 Flash (frontier-class, Mar 2026)

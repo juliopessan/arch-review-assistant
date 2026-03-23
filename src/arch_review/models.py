@@ -18,8 +18,9 @@ _MODEL_PRICING: list[tuple[str, float, float]] = [
     ("claude-sonnet-4",    3.00, 15.00),
     ("claude-haiku-4",     0.80,  4.00),
     # OpenAI
-    ("gpt-4o-mini",        0.15,  0.60),
-    ("gpt-4o",             2.50, 10.00),
+    ("gpt-5.4-nano",     0.20,  1.25),   # Ultra-cheap OCR / high-volume pipelines
+    ("gpt-4o-mini",      0.15,  0.60),
+    ("gpt-4o",           2.50, 10.00),
     # Google Gemini 3.x
     ("gemini-3.1-pro",     3.50, 10.50),
     ("gemini-3.1-flash",   0.30,  2.50),
