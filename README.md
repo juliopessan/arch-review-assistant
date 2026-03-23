@@ -29,6 +29,8 @@ Paste a description, upload a PDF or diagram image, and get back:
 - **Architecture Decision Records (ADRs)** auto-generated from findings
 - **Agents that learn** from every review and improve over time
 - **Feedback Loop** — approve/reject findings with 👍/👎, agents consult before suggesting to avoid repeating mistakes
+- **SOUL identity layer** — each agent has a persistent identity: codename, analytical style, known biases, specialization history, tone, and signature questions
+- **Skills platform** — install specialist agents with `arch-review skill install <name>` (database, api-design, data-privacy, ml-ops)
 - **Run Time report** — per-agent timing, tokens, cost, and ROI vs. manual review
 
 No boilerplate. No generic advice. Every finding is specific to *your* architecture.
@@ -206,6 +208,63 @@ Review → Findings → You approve/reject → Feedback JSON
                                               ↓
                           30 reviews later: consolidate → lessons.md
 ```
+
+
+### SOUL — Agent Identity Layer
+
+Each agent has a **SOUL** (persistent identity file) that goes far beyond a system prompt. The SOUL survives across reviews and evolves as the agent learns.
+
+| Section | What it contains |
+|---------|-----------------|
+| **Codename + Archetype** | Who the agent *is*, not just what they do |
+| **Identity** | First-person narrative, opinionated, grounded in experience |
+| **Analytical Style** | Mental frameworks, what they look for first |
+| **Known Biases** | What they over/under-index on — and how they actively correct |
+| **Specialization History** | Concrete past experience (PT-BR context) |
+| **Tone** | How they communicate findings |
+| **Signature Questions** | The 4 questions they always ask |
+
+The SOUL is the **fixed** identity layer. Below the `---` separator, lessons and patterns accumulate automatically after each review.
+
+**Agent codenames:**
+```
+🎯 Manager        → The Dispatcher
+🔐 Security       → The Adversary
+🛡️ Reliability    → The Pessimist
+💰 Cost           → The CFO's Spy
+📡 Observability  → The Signal Hunter
+📈 Scalability    → The Load Tester
+⚡ Performance    → The Profiler
+🔧 Maintainability → The Future Engineer
+🧠 Synthesizer    → The Architect
+```
+
+### Skills — Pluggable Specialist Agents
+
+The Skills system turns arch-review into a platform. Install specialist agents without touching the core codebase:
+
+```bash
+arch-review skill list                    # see available skills
+arch-review skill install database        # add database specialist
+arch-review skill install api-design      # add API design specialist
+arch-review skill install data-privacy    # add LGPD/GDPR specialist
+arch-review skill install ml-ops          # add MLOps specialist
+arch-review skill show database           # display a skill's SOUL
+arch-review skill remove database         # uninstall
+```
+
+**Built-in skills:**
+
+| Skill | Icon | Domain |
+|-------|------|--------|
+| `database` | 🗄️ | Schema design, indexing, migration safety, replication |
+| `api-design` | 🔌 | REST/GraphQL/gRPC contracts, versioning, breaking changes |
+| `data-privacy` | 🔏 | LGPD/GDPR, PII mapping, consent, retention, cross-border |
+| `ml-ops` | 🤖 | Drift, training-serving skew, feature stores, bias |
+
+Each skill has its own **SOUL**, system prompt, and prompt builder. Installed skills join the squad automatically on the next review — same parallel execution, same memory system, same feedback loop.
+
+**Creating a custom skill:** add a directory to `~/.arch-review/skills/<name>/` with `skill.json`, `soul.md`, `system.txt`, and `prompt.py` (must export `build_prompt(arch, ctx, lessons, patterns) -> str`).
 
 ### Error Handling
 
@@ -410,6 +469,8 @@ arch-review-assistant/
 │   ├── feedback/
 │   │   ├── __init__.py
 │   │   └── store.py           ← FeedbackStore: FIFO-30, per-domain JSON, prompt injection
+│   ├── skills/
+│   │   └── __init__.py        ← SkillRegistry + 4 built-in skills (database, api-design, data-privacy, ml-ops)
 │   ├── adr_generator.py       ← ADR generation engine
 │   ├── squad/
 │   │   ├── squad.py           ← 7-agent parallel orchestrator + RunMetrics
@@ -453,6 +514,8 @@ arch-review-assistant/
 - [x] Orange DNA design system
 - [x] Agent-specific think-bubbles (funny, 25 msgs per agent)
 - [x] **Feedback Loop** (Module 09 immune system) — 👍/👎 per finding, FIFO-30, prompt injection, Memory tab dashboard
+- [x] **SOUL identity layer** — 9 complete agent identities with codename, biases, history, tone, signature questions
+- [x] **Skills platform** — 4 built-in skills (database, api-design, data-privacy, ml-ops) + custom skill support
 - [x] Diamond AR favicon (SVG inline string, Orange DNA `#F04E37`)
 - [x] Manager z-order fix — always rendered on top (2-pass render)
 - [x] Manager fast synchronized walk (17px/frame, ~2.7s total for 7 desks)
@@ -477,7 +540,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) — PRs welcome.
 git clone https://github.com/juliopessan/arch-review-assistant
 cd arch-review-assistant
 pip install -e ".[dev]"
-pytest  # 96 tests passing
+pytest  # 128 tests passing
 ```
 
 ---
