@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import html, io, os, re, sys, threading, zipfile, random
+import hashlib, html, io, os, re, sys, threading, zipfile, random
 from datetime import datetime
 from pathlib import Path
 from queue import Empty, Queue
@@ -483,6 +483,23 @@ def _build_md(r: ReviewResult) -> str:
         lines += ["\n## Recommended ADRs\n"] + [f"{i}. {a}" for i, a in enumerate(r.recommended_adrs, 1)]
     return "\n".join(lines)
 
+def _clear_export_artifacts() -> None:
+    for key in ["pdf_bytes", "pdf_signature"]:
+        st.session_state.pop(key, None)
+
+def _review_export_signature(r: ReviewResult, lang: str) -> str:
+    payload = f"{lang}:{r.model_dump_json()}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+def _ensure_pdf_bytes(r: ReviewResult, lang: str) -> bytes:
+    signature = _review_export_signature(r, lang)
+    if st.session_state.get("pdf_signature") != signature or "pdf_bytes" not in st.session_state:
+        from pdf_export import build_pdf
+
+        st.session_state["pdf_bytes"] = build_pdf(r, lang=lang)
+        st.session_state["pdf_signature"] = signature
+    return st.session_state["pdf_bytes"]
+
 def _build_zip(ar: ADRGenerationResult) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -819,6 +836,7 @@ with tab_review:
             if st.button(t("review.clear"), use_container_width=True):
                 for k in ["review_result","adr_result","squad_log","arch_prefill"]:
                     st.session_state.pop(k, None)
+                _clear_export_artifacts()
                 st.rerun()
 
     st.divider()
@@ -843,6 +861,7 @@ with tab_review:
                 r = ReviewEngine(model=selected_model).review(arch_inp)
                 st.session_state["review_result"] = r
                 st.session_state.pop("adr_result", None)
+                _clear_export_artifacts()
             except Exception as exc:
                 st.error(f"❌ {exc}"); st.stop()
         if gen_adrs:
@@ -855,6 +874,7 @@ with tab_review:
         st.session_state.update({"squad_arch": arch_text, "squad_ctx": context,
                                    "squad_running": True, "squad_log": []})
         for k in ["review_result","adr_result"]: st.session_state.pop(k, None)
+        _clear_export_artifacts()
         st.rerun()
 
 
@@ -948,6 +968,7 @@ with tab_squad:
                     error_detail = ev.get("traceback", "")
                 elif ev["event"] == "result":
                     st.session_state["review_result"] = ev["result"]
+                    _clear_export_artifacts()
                 elif ev["event"] == "finished":
                     break
 
@@ -1231,40 +1252,35 @@ with tab_export:
         st.divider()
         pdf_title = "📄 Enterprise PDF Report" if lang == "en" else "📄 Relatório PDF Enterprise"
         pdf_desc  = (
-            "Orange DNA branded PDF — cover page, severity breakdown, "
-            "all findings with recommendations, opening questions, ADR list."
+            "Executive PDF with cover page, severity analysis, manager plan, runtime telemetry, "
+            "full findings, and ADR recommendations."
             if lang == "en" else
-            "PDF com identidade Orange DNA — capa, breakdown de severidade, "
-            "todos os findings com recomendações, perguntas de abertura, lista de ADRs."
+            "PDF executivo com capa, análise de severidade, plano do manager, telemetria de execução, "
+            "findings completos e recomendações de ADR."
         )
         st.markdown(f"**{pdf_title}**")
         st.caption(pdf_desc)
 
-        if st.button("⚙️ Generate PDF" if lang == "en" else "⚙️ Gerar PDF",
-                     type="primary", use_container_width=False):
-            with st.spinner("Building enterprise PDF..." if lang == "en"
-                            else "Gerando PDF enterprise..."):
-                try:
-                    from pdf_export import build_pdf
-                    pdf_bytes = build_pdf(r, lang=lang)
-                    st.session_state["pdf_bytes"] = pdf_bytes
-                except Exception as exc:
-                    st.error(f"PDF generation failed: {exc}")
-
-        if "pdf_bytes" in st.session_state:
+        try:
+            with st.spinner("Preparing enterprise PDF..." if lang == "en"
+                            else "Preparando PDF enterprise..."):
+                pdf_bytes = _ensure_pdf_bytes(r, lang)
             now_str = datetime.now().strftime("%Y%m%d")
             st.download_button(
-                "⬇️ Download PDF" if lang == "en" else "⬇️ Baixar PDF",
-                st.session_state["pdf_bytes"],
+                "⬇️ Download Enterprise PDF" if lang == "en" else "⬇️ Baixar PDF Enterprise",
+                pdf_bytes,
                 f"architecture-review-{now_str}.pdf",
                 "application/pdf",
                 use_container_width=False,
                 type="primary",
             )
             st.caption(
-                f"✓ PDF ready — {len(st.session_state['pdf_bytes']) // 1024} KB  ·  "
-                f"{r.summary.total_findings} findings  ·  Orange DNA design"
+                f"✓ PDF ready — {len(pdf_bytes) // 1024} KB  ·  "
+                f"{r.summary.total_findings} findings  ·  enterprise layout"
             )
+        except Exception as exc:
+            _clear_export_artifacts()
+            st.error(f"PDF generation failed: {exc}")
 
         # ── ADRs ZIP ──────────────────────────────────────────────────────────
         if "adr_result" in st.session_state:
